@@ -1,0 +1,4 @@
+include README.md
+recursive-include octoprint_GcodeLeveling/templates *
+recursive-include octoprint_GcodeLeveling/translations *
+recursive-include octoprint_GcodeLeveling/static *
