@@ -1,0 +1,80 @@
+<form class="form-horizontal">
+    <div class="control-group">
+        <h3>Gcode Leveling Settings</h3>
+        <div>
+            <span class="help-inline"><span class="label label-info">Info:</span>
+                The Polynomial Degree determines how detailed and curvy the model of the surface will be.
+                The degree should be kept as low as possible to avoid issues between test points.
+            </span>
+            <span class="help-inline"><span class="label label-warning">Warning:</span>
+                The Minimum and Maximum z values are used to check for positions that could damage your machine.
+                These values should be safe to move to with a <code>G0</code> command.
+                If the plugin detects that a movement would fall outside this range, then the file upload will display an error and you should consider changing the configuration.
+            </span>
+            <span class="help-inline"><span class="label label-info">Info:</span>
+                The invert option determines how the original positions and the gcode positions should be combined.
+                If you want positive gcode values to move the toolhead up and the toolhead is at the work surface at a negative, then do not enable the invert option.
+                If positive movement moves the toolhead down, but you want a positive value in the gcode to move up then enable the invert option.
+            </span>
+            <span class="help-inline"><span class="label label-info">Info:</span>
+                The Line break up option breaks up long moves into shorter ones that follow the height model.
+                Set the distance to 0.0 to disable this feature; otherwise, all moves longer than the specified length will be broken into smaller moves.
+            </span>
+        </div>
+        <div>
+            <span class="help-inline">{{ _('Polynomial Degrees of X')}}</span>
+            <div class="input-append">
+                <input type="number" class="input-mini text-right" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.modelDegree.x">
+            </div>
+            <span class="help-inline">{{ _('Polynomial Degrees of Y')}}</span>
+            <div class="input-append">
+                <input type="number" class="input-mini text-right" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.modelDegree.y">
+            </div>
+        </div>
+        <div>
+            <span class="help-inline">{{ _('Minimum Z pos to Write')}}</span>
+            <div class="input-append">
+                <input type="number" class="input-mini text-right" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.zMin">
+            </div>
+            <span class="help-inline">{{ _('Maximum Z pos to Write')}}</span>
+            <div class="input-append">
+                <input type="number" step="0.001" class="input-mini text-right" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.zMax">
+            </div>
+        </div>
+        <div>
+            <span class="help-inline">{{ _('Invert addition of original position')}}</span>
+            <div class="input-append">
+                <input type="checkbox" data-bind="checked: settingsViewModel.settings.plugins.gcodeleveling.invertPosition">
+            </div>
+        </div>
+        <div>
+            <span class="help-inline">{{ _('Length of move to break up')}}</span>
+            <div class="input-append">
+                <input type="number" step="0.001" class="input-mini text-right" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.lineBreakDist">
+            </div>
+        </div>
+        <button data-bind="click: safetyButton" style="visibility: hidden"></button>
+    </div>
+    <div class="control-group">
+        <h3>Points</h3>
+        <span class="help-inline"><span class="label label-info">Info:</span>
+            The calibration points are used to create a model of the surface.
+            Enter the x and y coordinate, then the observed z coordinate.
+        </span>
+        <div data-bind="foreach: settingsViewModel.settings.plugins.gcodeleveling.points">
+
+            <div class="input-append">
+                <input type="number" step="0.001" class="input-mini text-right" data-bind="value: $data[0]">
+                <input type="number" step="0.001" class="input-mini text-right" data-bind="value: $data[1]">
+                <input type="number" step="0.001" class="input-mini text-right" data-bind="value: $data[2]">
+            </div>
+            <button title="Remove Command Widget" class="btn btn-danger"
+            data-bind="click: $parent.removePoint, attr: { 'title': 'Remove Point' }"><i
+            class="fa fa-trash-o"></i>
+            </button>
+        </div>
+        <button title="Add Point" class="btn btn-primary" data-bind="click: addPoint"><i
+        class="fa fa-plus"></i>
+        </button>
+    </div>
+</form>

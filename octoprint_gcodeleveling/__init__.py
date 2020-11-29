@@ -4,7 +4,7 @@ from __future__ import absolute_import
 import octoprint.plugin
 import octoprint.filemanager
 import octoprint.filemanager.util
-import octoprint_GcodeLeveling.twoDimFit
+import octoprint_gcodeleveling.twoDimFit
 
 import re
 import sys
@@ -17,46 +17,96 @@ class GcodeLevelingError(Exception):
 		self.message = message
 
 class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
-	def __init__(self, fileBufferedReader, python_version, logger, coeffs, zMin, zMax):
+	def __init__(self, fileBufferedReader, python_version, logger, coeffs, zMin, zMax, lineBreakDist, invertPosition):
 		super(GcodePreProcessor, self).__init__(fileBufferedReader)
 		self.python_version = python_version
 		self._logger = logger
 		self.coeffs = coeffs
 		self.zMin = zMin
 		self.zMax = zMax
-
-		self.zWarned = False
+		self.lineBreakDist = lineBreakDist
+		self.invertPosition = invertPosition
 
 		self.moveCurr = "G0"
+
+		self.xPrev = 0.0
+		self.yPrev = 0.0
+		self.zPrev = 0.0
+
 		self.xCurr = 0.0
 		self.yCurr = 0.0
 		self.zCurr = 0.0
 		self.fCurr = 0.0
 		self.fChanged = False
-		self.eCurr = 0.0
-		self.eUsed = False
+		# self.eCurr = 0.0
+		# self.eUsed = False
 
 		self.move_pattern = re.compile("^G[0-1]\s")
 		self.feed_pattern = re.compile("^F")
 		self.comment_pattern = re.compile(";.*$[\n]*")
 
-	def reconstruct_line(self, zNew):
+	def move_dist(self):
+		return ((self.xCurr-self.xPrev)**2 + (self.yCurr-self.yPrev)**2 + (self.zCurr-self.zPrev)**2)**0.5
+
+	def get_z(self, x, y, zOffset):
+		zNew = twoDimFit.twoDpolyEval(self.coeffs, x, y) + (zOffset * (-1 if self.invertPosition else 1))
+
+		if (zNew < self.zMin or zNew > self.zMax):
+			raise GcodeLevelingError("Computed Z was outside of bounds", "Gcode Leveling config likely needs to be changed")
+		return zNew
+
+	def construct_line(self, basePos, dirVector, dist):
 		outLine = self.moveCurr
 
-		outLine += " X" + str(self.xCurr)
-		outLine += " Y" + str(self.yCurr)
-		outLine += " Z" + str(zNew)
+		xNew = basePos[0] + dirVector[0]*dist
+		yNew = basePos[1] + dirVector[1]*dist
+		zOffset = basePos[2] + dirVector[2]*dist
+
+
+
+		outLine += " X" + str(xNew)
+		outLine += " Y" + str(yNew)
+		outLine += " Z" + str(self.get_z(xNew, yNew, zOffset))
 
 		if self.fChanged == True:
 			outLine += " F" + str(self.fCurr)
 			self.fChanged = False
-		if self.eUsed == True:
-			outLine += " E" + str(self.eCurr)
 
 		outLine += "\n"
 
 		return outLine
 
+	def reconstruct_line(self):
+		outLine = self.moveCurr
+
+		outLine += " X" + str(self.xCurr)
+		outLine += " Y" + str(self.yCurr)
+		outLine += " Z" + str(self.get_z(self.xCurr, self.yCurr, self.zCurr))
+
+		if self.fChanged == True:
+			outLine += " F" + str(self.fCurr)
+			self.fChanged = False
+		# if self.eUsed == True:
+		# 	outLine += " E" + str(self.eCurr)
+
+		outLine += "\n"
+
+		return outLine
+
+	def break_up_line(self):
+		numSegments = int(self.moveDist//self.lineBreakDist)
+		lenSegments = self.moveDist/numSegments
+
+		xUnit = (self.xCurr-self.xPrev)/self.moveDist
+		yUnit = (self.yCurr-self.yPrev)/self.moveDist
+		zUnit = (self.zCurr-self.zPrev)/self.moveDist
+
+		outLines = ""
+
+		for seg in range(1, numSegments+1):
+			outLines += self.construct_line((self.xPrev, self.yPrev, self.zPrev), (xUnit, yUnit, zUnit), lenSegments*seg)
+
+		return outLines
 
 	def process_line(self, origLine):
 		if not len(origLine):
@@ -67,6 +117,7 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 		else:
 			line = origLine
 
+		# Check for lone Feed rate commands
 		if re.match(self.feed_pattern, line) is not None:
 			line = re.sub(self.comment_pattern, "", line)
 
@@ -75,10 +126,14 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 
 			return origLine
 
+		# Check for standard Movement commands
 		if re.match(self.move_pattern, line) is not None:
 			line = re.sub(self.comment_pattern, "", line)
-			# print(line)
 			gcodeParts = re.split("\s", line)[:]
+
+			self.xPrev = self.xCurr
+			self.yPrev = self.yCurr
+			self.zPrev = self.zCurr
 
 			self.moveCurr = gcodeParts[0]
 
@@ -97,21 +152,20 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 							self.fChanged = True
 						self.fCurr = fNew
 
-					elif leadChar == 'E':
-						self.eUsed = True
-						self.eCurr = float(part[1:])
+					# elif leadChar == 'E':
+					# 	self.ePrev = self.eCurr
+					# 	self.eUsed = True
+					# 	self.eCurr = float(part[1:])
+
+			self.moveDist = self.move_dist()
 
 
-			zNew = twoDimFit.twoDpolyEval(self.coeffs, self.xCurr, self.yCurr) - self.zCurr
+			if (self.moveDist > self.lineBreakDist and self.lineBreakDist != 0.0):
+				line = self.break_up_line()
+			else:
+				line = self.reconstruct_line()
 
-			if (zNew < self.zMin or zNew > self.zMax):
-				# self._logger.warn("Computed Z was outside of bounds")
-				# TODO: communicate to the frontend the error
-				raise GcodeLevelingError("Computed Z was outside of bounds", "Gcode Leveling config likely needs to be changed")
 
-			# self._logger.info((self.xCurr, self.yCurr, zNew))
-
-			line = self.reconstruct_line(zNew)
 
 		if (self.python_version == 3):
 			line = line.encode('utf-8')
@@ -124,51 +178,81 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 						  octoprint.plugin.TemplatePlugin):
 
 
-
 	def createFilePreProcessor(self, path, file_object, blinks=None, printer_profile=None, allow_overwrite=True, *args, **kwargs):
 
 		fileName = file_object.filename
 		if not octoprint.filemanager.valid_file_type(fileName, type="gcode"):
 			return file_object
 		fileStream = file_object.stream()
-		self._logger.info("GcodePreProcessor started processing.")
-		self.gcode_preprocessor = GcodePreProcessor(fileStream, self.python_version, self._logger, self.coeffs, self.zMin, self.zMax)
-		self._logger.info("GcodePreProcessor finished processing.")
+		self._logger.info("Gcode PreProcessing started.")
+		self.gcode_preprocessor = GcodePreProcessor(fileStream, self.python_version, self._logger, self.coeffs, self.zMin, self.zMax, self.lineBreakDist, self.invertPosition)
+		self._logger.info("Gcode PreProcessing finished.")
 		return octoprint.filemanager.util.StreamWrapper(fileName, self.gcode_preprocessor)
 
 
+	def update_from_settings(self):
+		points = self._settings.get(['points'])
+		self.zMin = float(self._settings.get(['zMin']))
+		self.zMax = float(self._settings.get(['zMax']))
+		self.lineBreakDist = float(self._settings.get(['lineBreakDist']))
+		self.modelDegree = self._settings.get(['modelDegree'])
+		self.invertPosition = bool(self._settings.get(['invertPosition']))
+
+		self.coeffs = twoDimFit.twoDpolyFit(points, int(self.modelDegree['x']), int(self.modelDegree['y']))
+		self._logger.info("Leveling Model Computed")
+
 	# ~~ StartupPlugin mixin
 	def on_after_startup(self):
-		self.points = [[0.0, 0.0, 71.75], [0.0, 200.0, 71.75], [0.0, 400.0, 72.0], [200.0, 400.0, 71.25], [400.0, 400.0, 71.75], [400.0, 200.0, 71.75], [400.0, 0.0, 72.0], [200.0, 0.0, 71.25], [200.0, 200.0, 71.5], [100.0, 100.0, 71.0], [300.0, 100.0, 71.6], [100.0, 300.0, 71.75], [300.0, 300.0, 71.5], [100.0, 0.0, 71.25], [300.0, 0.0, 71.5], [0.0, 100.0, 71.25], [200.0, 100.0, 71.5], [400.0, 100.0, 71.75], [100.0, 200.0, 71.5], [300.0, 200.0, 71.6], [0.0, 300.0, 71.75], [200.0, 300.0, 71.5], [400.0, 300.0, 71.75], [100.0, 400.0, 71.0], [300.0, 400.0, 71.5]]
-
-		self.zMin = 0.0
-		self.zMax = 75.0
 		self._logger.info("Gcode Leveling Plugin started")
+
 		if (sys.version_info > (3, 5)): # Detect and set python version
 			self.python_version = 3
 		else:
 			self.python_version = 2
 
-		self.coeffs = twoDimFit.twoDpolyFit(self.points, 4, 4)
-		self._logger.info("Leveling Model Computed")
+		self.update_from_settings()
 
 	##~~ SettingsPlugin mixin
 
 	def get_settings_defaults(self):
-		return dict(
-			# put your plugin's default settings here
-		)
+		return {
+			"points": [
+				[0,0,0]
+			],
+			"modelDegree": {"x":2,"y":2},
+			"zMin": 0.0,
+			"zMax": 100.0,
+			"lineBreakDist": 10.0,
+			"invertPosition": False
+		}
+
+	def on_settings_save(self, data):
+		octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
+
+		self.update_from_settings()
+
+	def get_settings_version(self):
+		return 0
 
 	##~~ AssetPlugin mixin
 
-	# def get_assets(self):
-	# 	# Define your plugin's asset files to automatically include in the
-	# 	# core UI here.
-	# 	return dict(
-	# 		js=["js/GcodeLeveling.js"],
-	# 		css=["css/GcodeLeveling.css"],
-	# 		less=["less/GcodeLeveling.less"]
-	# 	)
+	def get_assets(self):
+		# Define your plugin's asset files to automatically include in the
+		# core UI here.
+		return dict(
+			js=["js/GcodeLeveling.js"]
+			# css=["css/GcodeLeveling.css"],
+			# less=["less/GcodeLeveling.less"]
+		)
+
+	def get_template_configs(self):
+		return [
+			{
+                "type": "settings",
+                "template": "gcodeleveling_settings.jinja2",
+                "custom_bindings": True
+            }
+		]
 
 	##~~ Softwareupdate hook
 
@@ -177,7 +261,7 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 		# Plugin here. See https://docs.octoprint.org/en/master/bundledplugins/softwareupdate.html
 		# for details.
 		return dict(
-			GcodeLeveling=dict(
+			gcodeleveling=dict(
 				displayName="GcodeLeveling Plugin",
 				displayVersion=self._plugin_version,
 
@@ -192,10 +276,6 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 			)
 		)
 
-
-# If you want your plugin to be registered within OctoPrint under a different name than what you defined in setup.py
-# ("OctoPrint-PluginSkeleton"), you may define that here. Same goes for the other metadata derived from setup.py that
-# can be overwritten via __plugin_xyz__ control properties. See the documentation for that.
 __plugin_name__ = "Gcode Leveling"
 
 __plugin_pythoncompat__ = ">=2.7,<4" # python 2 and 3
