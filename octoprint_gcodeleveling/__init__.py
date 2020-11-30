@@ -41,6 +41,8 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 		# self.eCurr = 0.0
 		# self.eUsed = False
 
+		self.afterStart = False
+
 		self.move_pattern = re.compile("^G[0-1]\s")
 		self.feed_pattern = re.compile("^F")
 		self.comment_pattern = re.compile(";.*$[\n]*")
@@ -160,9 +162,11 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 			self.moveDist = self.move_dist()
 
 
-			if (self.moveDist > self.lineBreakDist and self.lineBreakDist != 0.0):
+			# self.afterStart ensures that the first move isn't broken up and doesnt start at 0, 0, 0
+			if (self.afterStart and self.moveDist > self.lineBreakDist and self.lineBreakDist != 0.0):
 				line = self.break_up_line()
 			else:
+				self.afterStart = True
 				line = self.reconstruct_line()
 
 
