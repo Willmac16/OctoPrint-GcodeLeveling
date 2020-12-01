@@ -32,20 +32,27 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 		self.xPrev = 0.0
 		self.yPrev = 0.0
 		self.zPrev = 0.0
+		self.ePrev = 0.0
 
 		self.xCurr = 0.0
 		self.yCurr = 0.0
 		self.zCurr = 0.0
-		self.fCurr = 0.0
-		self.fChanged = False
-		# self.eCurr = 0.0
-		# self.eUsed = False
+
+		self.eCurr = 0.0
+
+		self.eMode = "None"
+		self.moveMode = "Absolute"
+
+		self.spareParts = ""
+
 
 		self.afterStart = False
 
 		self.move_pattern = re.compile("^G[0-1]\s")
 		self.feed_pattern = re.compile("^F")
-		self.comment_pattern = re.compile(";.*$[\n]*")
+		self.move_mode_pattern = re.compile("^G9[0-1]")
+		self.extruder_mode_pattern = re.compile("^M8[2-3]")
+		self.comment_pattern = re.compile(";")
 
 	def move_dist(self):
 		return ((self.xCurr-self.xPrev)**2 + (self.yCurr-self.yPrev)**2 + (self.zCurr-self.zPrev)**2)**0.5
@@ -55,24 +62,32 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 
 		if (zNew < self.zMin or zNew > self.zMax):
 			raise GcodeLevelingError("Computed Z was outside of bounds", "Gcode Leveling config likely needs to be changed")
-		return zNew
+		return round(zNew, 3)
 
-	def construct_line(self, basePos, dirVector, dist):
+	def construct_line(self, basePos, dirVector, seg):
 		outLine = self.moveCurr
 
-		xNew = basePos[0] + dirVector[0]*dist
-		yNew = basePos[1] + dirVector[1]*dist
-		zOffset = basePos[2] + dirVector[2]*dist
+		xNew = basePos[0] + dirVector[0]*seg
+		yNew = basePos[1] + dirVector[1]*seg
+		zOffset = basePos[2] + dirVector[2]*seg
 
 
 
-		outLine += " X" + str(xNew)
-		outLine += " Y" + str(yNew)
+		outLine += " X" + str(round(xNew, 3))
+		outLine += " Y" + str(round(yNew, 3))
 		outLine += " Z" + str(self.get_z(xNew, yNew, zOffset))
 
-		if self.fChanged == True:
-			outLine += " F" + str(self.fCurr)
-			self.fChanged = False
+		if (self.eMode == "Absolute"):
+			eNew = basePos[3] + dirVector[3]*seg
+			outLine += " E" + str(round(eNew, 5))
+		elif (self.eMode == "Relative"):
+			eNew = dirVector[3]
+			outLine += " E" + str(round(eNew, 5))
+
+
+
+		outLine += " " + self.spareParts
+		self.spareParts = ""
 
 		outLine += "\n"
 
@@ -81,15 +96,15 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 	def reconstruct_line(self):
 		outLine = self.moveCurr
 
-		outLine += " X" + str(self.xCurr)
-		outLine += " Y" + str(self.yCurr)
+		outLine += " X" + str(round(self.xCurr, 3))
+		outLine += " Y" + str(round(self.yCurr, 3))
 		outLine += " Z" + str(self.get_z(self.xCurr, self.yCurr, self.zCurr))
 
-		if self.fChanged == True:
-			outLine += " F" + str(self.fCurr)
-			self.fChanged = False
-		# if self.eUsed == True:
-		# 	outLine += " E" + str(self.eCurr)
+		if self.eMode != "None":
+			outLine += " E" + str(round(self.eCurr, 5))
+
+		outLine += " " + self.spareParts
+		self.spareParts = ""
 
 		outLine += "\n"
 
@@ -97,20 +112,22 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 
 	def break_up_line(self):
 		numSegments = int(self.moveDist//self.lineBreakDist)
-		lenSegments = self.moveDist/numSegments
 
-		xUnit = (self.xCurr-self.xPrev)/self.moveDist
-		yUnit = (self.yCurr-self.yPrev)/self.moveDist
-		zUnit = (self.zCurr-self.zPrev)/self.moveDist
+		eSeg = (self.eCurr-self.ePrev)/numSegments
+
+		xSeg = (self.xCurr-self.xPrev)/numSegments
+		ySeg = (self.yCurr-self.yPrev)/numSegments
+		zSeg = (self.zCurr-self.zPrev)/numSegments
 
 		outLines = ""
 
 		for seg in range(1, numSegments+1):
-			outLines += self.construct_line((self.xPrev, self.yPrev, self.zPrev), (xUnit, yUnit, zUnit), lenSegments*seg)
+			outLines += self.construct_line((self.xPrev, self.yPrev, self.zPrev, self.ePrev), (xSeg, ySeg, zSeg, eSeg), seg)
 
 		return outLines
 
 	def process_line(self, origLine):
+
 		if not len(origLine):
 			return None
 
@@ -119,19 +136,26 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 		else:
 			line = origLine
 
-		# Check for lone Feed rate commands
-		if re.match(self.feed_pattern, line) is not None:
-			line = re.sub(self.comment_pattern, "", line)
-
-			fCommand = re.split("\s", line)[0]
-			self.fCurr = float(fCommand[1:])
-
-			return origLine
-
 		# Check for standard Movement commands
-		if re.match(self.move_pattern, line) is not None:
-			line = re.sub(self.comment_pattern, "", line)
-			gcodeParts = re.split("\s", line)[:]
+		if (re.match(self.move_pattern, line) is not None) and (self.moveMode != "Relative"):
+			# Logic to seperate comments so they can be reattached after processing
+			if line.find(";") != -1:
+				comSplit = line.split(";")
+				if len(comSplit) > 1:
+					activeCode = comSplit[0]
+
+					self.spareParts += ";"
+
+					for part in comSplit[1:]:
+						self.spareParts += part + " "
+				else:
+					return origLine
+			else:
+				activeCode = line
+
+
+			gcodeParts = re.split("\s", activeCode)
+
 
 			self.xPrev = self.xCurr
 			self.yPrev = self.yCurr
@@ -140,7 +164,7 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 			self.moveCurr = gcodeParts[0]
 
 			for part in gcodeParts[1:]:
-				if part != "":
+				if len(part) > 1:
 					leadChar = part[0]
 					if leadChar == "X":
 						self.xCurr = float(part[1:])
@@ -148,18 +172,22 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 						self.yCurr = float(part[1:])
 					elif leadChar == 'Z':
 						self.zCurr = float(part[1:])
-					elif leadChar == 'F':
-						fNew = float(part[1:])
-						if (fNew != self.fCurr):
-							self.fChanged = True
-						self.fCurr = fNew
+					elif leadChar == 'E':
+						# Extrusion Mode Stuff
+						if (self.eMode == "Relative"):
+							self.ePrev = 0
+						elif (self.eMode == "Absolute"):
+							self.ePrev = self.eCurr
+						else:
+							self.eMode = "Absolute"
+							self.ePrev = self.eCurr
 
-					# elif leadChar == 'E':
-					# 	self.ePrev = self.eCurr
-					# 	self.eUsed = True
-					# 	self.eCurr = float(part[1:])
 
+						self.eCurr = float(part[1:])
+					else:
+						self.spareParts = part + " " + self.spareParts
 			self.moveDist = self.move_dist()
+
 
 
 			# self.afterStart ensures that the first move isn't broken up and doesnt start at 0, 0, 0
@@ -169,10 +197,43 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 				self.afterStart = True
 				line = self.reconstruct_line()
 
+		# Check for movement mode
+		if re.match(self.move_mode_pattern, line) is not None:
+			line = re.sub(self.comment_pattern, "", line)
+
+			mode = re.split("\s", line)[0]
+
+			if mode == "G90":
+				self.moveMode = "Absolute"
+			elif mode == "G91":
+				self.moveMode = "Relative"
+
+			# self._logger.info("Line sets move mode " + self.moveMode)
+
+
+			return origLine
+
+		# Check for extruder movement mode
+		if re.match(self.extruder_mode_pattern, line) is not None:
+			line = re.sub(self.comment_pattern, "", line)
+
+			mode = re.split("\s", line)[0]
+
+			if mode == "M82":
+				self.eMode = "Absolute"
+			elif mode == "M83":
+				self.eMode = "Relative"
+
+			# self._logger.info("Line sets extruder mode " + self.eMode)
+
+
+			return origLine
 
 
 		if (self.python_version == 3):
 			line = line.encode('utf-8')
+
+		# self._logger.info(line)
 
 		return line
 
@@ -190,7 +251,6 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 		fileStream = file_object.stream()
 		self._logger.info("Gcode PreProcessing started.")
 		self.gcode_preprocessor = GcodePreProcessor(fileStream, self.python_version, self._logger, self.coeffs, self.zMin, self.zMax, self.lineBreakDist, self.invertPosition)
-		self._logger.info("Gcode PreProcessing finished.")
 		return octoprint.filemanager.util.StreamWrapper(fileName, self.gcode_preprocessor)
 
 
