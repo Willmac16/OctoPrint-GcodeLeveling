@@ -6,6 +6,8 @@ import octoprint.filemanager
 import octoprint.filemanager.util
 import octoprint_gcodeleveling.twoDimFit
 
+from octoprint.filemanager import FileDestinations
+
 import re
 import sys
 
@@ -89,7 +91,7 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 		outLine += " " + self.spareParts
 		self.spareParts = ""
 
-		outLine += "\n"
+		outLine += "\r\n"
 
 		return outLine
 
@@ -106,7 +108,7 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 		outLine += " " + self.spareParts
 		self.spareParts = ""
 
-		outLine += "\n"
+		outLine += "\r\n"
 
 		return outLine
 
@@ -244,26 +246,68 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 
 
 	def createFilePreProcessor(self, path, file_object, blinks=None, printer_profile=None, allow_overwrite=True, *args, **kwargs):
+		if self.pointsEntered:
+			fileName = file_object.filename
+			if not octoprint.filemanager.valid_file_type(fileName, type="gcode"):
+				return file_object
 
-		fileName = file_object.filename
-		if not octoprint.filemanager.valid_file_type(fileName, type="gcode"):
+			if fileName.endswith("_NO-GCL.gcode"):
+				return file_object
+			else:
+				if self.unmodifiedCopy:
+					import os
+
+					gclFileName = re.sub(".gcode", "_NO-GCL.gcode", fileName)
+					gclShortPath = re.sub(".gcode", "_NO-GCL.gcode", path)
+
+					gclPath = self._file_manager.join_path(FileDestinations.LOCAL, gclShortPath)
+
+
+
+
+
+					# Unprocessed file stream is directed to a different file
+					unprocessed = octoprint.filemanager.util.StreamWrapper(gclFileName, file_object.stream())
+					unprocessed.save(gclPath)
+
+					cleanFO = octoprint.filemanager.util.DiskFileWrapper(gclFileName, gclPath)
+					self._file_manager.add_file(FileDestinations.LOCAL, gclPath, cleanFO, allow_overwrite=True, display=gclFileName)
+
+				fileStream = file_object.stream()
+				self._logger.info("Gcode PreProcessing started.")
+				self.gcode_preprocessor = GcodePreProcessor(fileStream, self.python_version, self._logger, self.coeffs, self.zMin, self.zMax, self.lineBreakDist, self.invertPosition)
+			return octoprint.filemanager.util.StreamWrapper(fileName, self.gcode_preprocessor)
+		else:
+			self._logger.info("Points have not been entered (or they are all zero). Enter points or disable this plugin if you do not need it.")
+
 			return file_object
-		fileStream = file_object.stream()
-		self._logger.info("Gcode PreProcessing started.")
-		self.gcode_preprocessor = GcodePreProcessor(fileStream, self.python_version, self._logger, self.coeffs, self.zMin, self.zMax, self.lineBreakDist, self.invertPosition)
-		return octoprint.filemanager.util.StreamWrapper(fileName, self.gcode_preprocessor)
 
 
 	def update_from_settings(self):
 		points = self._settings.get(['points'])
-		self.zMin = float(self._settings.get(['zMin']))
-		self.zMax = float(self._settings.get(['zMax']))
-		self.lineBreakDist = float(self._settings.get(['lineBreakDist']))
-		self.modelDegree = self._settings.get(['modelDegree'])
-		self.invertPosition = bool(self._settings.get(['invertPosition']))
 
-		self.coeffs = twoDimFit.twoDpolyFit(points, int(self.modelDegree['x']), int(self.modelDegree['y']))
-		self._logger.info("Leveling Model Computed")
+		allZeros = True
+		for point in points:
+			for coor in point:
+				if coor != 0.0:
+					allZeros = False
+
+		self.pointsEntered = not allZeros
+
+		if self.pointsEntered:
+			self.zMin = float(self._settings.get(['zMin']))
+			self.zMax = float(self._settings.get(['zMax']))
+			self.lineBreakDist = float(self._settings.get(['lineBreakDist']))
+			self.modelDegree = self._settings.get(['modelDegree'])
+			self.invertPosition = bool(self._settings.get(['invertPosition']))
+			self.unmodifiedCopy = bool(self._settings.get(['unmodifiedCopy']))
+
+			self.coeffs = twoDimFit.twoDpolyFit(points, int(self.modelDegree['x']), int(self.modelDegree['y']))
+			self._logger.info("Leveling Model Computed")
+		else:
+			self._logger.info("Points have not been entered (or they are all zero). Enter points or disable this plugin if you do not need it.")
+
+
 
 	# ~~ StartupPlugin mixin
 	def on_after_startup(self):
@@ -287,7 +331,8 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 			"zMin": 0.0,
 			"zMax": 100.0,
 			"lineBreakDist": 10.0,
-			"invertPosition": False
+			"invertPosition": False,
+			"unmodifiedCopy": True
 		}
 
 	def on_settings_save(self, data):
@@ -301,12 +346,8 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 	##~~ AssetPlugin mixin
 
 	def get_assets(self):
-		# Define your plugin's asset files to automatically include in the
-		# core UI here.
 		return dict(
 			js=["js/GcodeLeveling.js"]
-			# css=["css/GcodeLeveling.css"],
-			# less=["less/GcodeLeveling.less"]
 		)
 
 	def get_template_configs(self):
@@ -321,9 +362,6 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 	##~~ Softwareupdate hook
 
 	def get_update_information(self):
-		# Define the configuration for your plugin to use with the Software Update
-		# Plugin here. See https://docs.octoprint.org/en/master/bundledplugins/softwareupdate.html
-		# for details.
 		return dict(
 			gcodeleveling=dict(
 				displayName="GcodeLeveling Plugin",
