@@ -278,7 +278,6 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 
 			return file_object
 
-
 	def update_from_settings(self):
 		points = self._settings.get(['points'])
 
@@ -304,8 +303,8 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 			self._logger.info("Points have not been entered (or they are all zero). Enter points or disable this plugin if you do not need it.")
 
 
-
 	# ~~ StartupPlugin mixin
+
 	def on_after_startup(self):
 		self._logger.info("Gcode Leveling Plugin started")
 
@@ -349,10 +348,10 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 	def get_template_configs(self):
 		return [
 			{
-                "type": "settings",
-                "template": "gcodeleveling_settings.jinja2",
-                "custom_bindings": True
-            }
+				"type": "settings",
+				"template": "gcodeleveling_settings.jinja2",
+				"custom_bindings": True
+			}
 		]
 
 	##~~ Softwareupdate hook

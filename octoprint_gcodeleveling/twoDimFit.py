@@ -52,17 +52,9 @@ def solve(A, Y):
 def twoDpolyEval(coeffs, x, y):
 	z = 0
 
-	xCs, yCs = coeffs
-
-	xDeg = 0
-	for c in xCs:
-		z+=c*x**xDeg
-		xDeg+=1
-
-	yDeg = 0
-	for c in yCs:
-		z+=c*y**yDeg
-		yDeg+=1
+	for r, row in enumerate(coeffs):
+		for c, coeff in enumerate(row):
+			z += coeff * x**r * y**c
 
 	return z
 
@@ -73,49 +65,26 @@ def sigma(ps, xDeg, yDeg, zDeg=0):
 	return sum
 
 def twoDpolyFit(ps, xDeg, yDeg):
-	A = np.zeros(((xDeg+1)+(yDeg+1), (xDeg+1)+(yDeg+1)))
+	A = np.zeros(((xDeg+1)*(yDeg+1), (xDeg+1)*(yDeg+1)))
 	ps = np.array(ps, dtype="float")
 
-	for r in range((xDeg+1)+(yDeg+1)):
-		for c in range((xDeg+1)+(yDeg+1)):
-			xRow = 0
-			yRow = 0
-			xCol = 0
-			yCol = 0
-
-
-			if (r <= xDeg):
-				if (c <= xDeg):
-					xRow = r
-					xCol = c
-				else:
-					xRow = r
-
-					yCol = c-(xDeg+1)
-			else:
-				if (c <= xDeg):
-					yRow = r-(xDeg+1)
-
-					xCol = c
-				else:
-					yRow = r-(xDeg+1)
-					yCol = c-(xDeg+1)
-
+	for r in range((xDeg+1)*(yDeg+1)):
+		xRow = r // (yDeg+1)
+		yRow = r % (yDeg+1)
+		for c in range((xDeg+1)*(yDeg+1)):
+			xCol = c // (yDeg+1)
+			yCol = c % (yDeg+1)
 
 			A[r, c] = sigma(ps, xRow+xCol, yRow+yCol)
 
+	Z = np.zeros((xDeg+1)*(yDeg+1))
 
-	Z = np.zeros((xDeg+1)+(yDeg+1))
+	for t in range((xDeg+1)*(yDeg+1)):
+		xTow = t // (yDeg+1)
+		yTow = t % (yDeg+1)
 
-	for c in range((xDeg+1)+(yDeg+1)):
-			if (c <= xDeg):
-				Z[c] = sigma(ps, c, 0, zDeg=1)
-			else:
-				Z[c] = sigma(ps, 0, c-(xDeg+1), zDeg=1)
-
+		Z[t] = sigma(ps, xTow, yTow, zDeg=1)
 
 	cS = solve(A, Z)
-
-	coeffs = (cS[:xDeg+1], cS[xDeg+1:])
-
+	coeffs = cS.reshape((xDeg+1),(yDeg+1))
 	return coeffs
