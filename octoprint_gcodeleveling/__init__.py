@@ -260,11 +260,7 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 					gclFileName = re.sub(".gcode", "_NO-GCL.gcode", fileName)
 					gclShortPath = re.sub(".gcode", "_NO-GCL.gcode", path)
 
-					gclPath = self._file_manager.join_path(FileDestinations.LOCAL, gclShortPath)
-
-
-
-
+					gclPath = self._file_manager.path_on_disk(FileDestinations.LOCAL, gclShortPath)
 
 					# Unprocessed file stream is directed to a different file
 					unprocessed = octoprint.filemanager.util.StreamWrapper(gclFileName, file_object.stream())
