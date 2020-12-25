@@ -33,6 +33,7 @@ or manually using this URL:
 + The invert setting is not needed by most normal configurations, and should be left disabled.
     - In my specific setup, I have a G0 Z0 sent to the printer place my toolhead as high as it can go, and a G0 Z71 takes the toolhead right to the surface. With this setting enabled, I can have the gcode files I upload to OctoPrint say that a Z of 0 is right on the surface and a z of 10 is 10 mm above it.
 
++ The unmodified original option creates a copy of the uploaded file with `_NO-GCL` on the end of its name, that this plugin will not modify.
 
 + The segment length option breaks up long moves into shorter ones that follow the height model at each of the endpoints.
     - Set the distance to 0.0 to disable this feature; otherwise, all moves longer than the specified length will be broken into smaller moves.
