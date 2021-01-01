@@ -44,6 +44,12 @@
                 <input type="number" step="0.001" class="input-mini text-right" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.lineBreakDist">
             </div>
         </div>
+        <div>
+            <span class="help-inline">{{ _('Length of Arc Segments')}}</span>
+            <div class="input-append">
+                <input type="number" step="0.001" class="input-mini text-right" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.arcSegDist">
+            </div>
+        </div>
         <button data-bind="click: safetyButton" style="visibility: hidden"></button>
     </div>
     <div class="control-group">

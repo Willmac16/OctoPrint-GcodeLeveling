@@ -2,7 +2,8 @@
 
 This plugin creates a model of the work surface (using the least squares method on user provided points), allowing for leveling of machines through gcode that otherwise cannot be leveled (e.g. for a grbl machine). A user just needs to measure some z values at a variety of x and y values (e.g. with the paper test), then configure a couple of settings, and the plugin will handle the leveling on file upload.
 
-This plugin really only makes sense it you have no other way of leveling out stuff (i.e. your firmware doesn't offer that feature). Also note, that the plugin will stop leveling upon a `G91` command.
+This plugin really only makes sense it you have no other way of leveling out stuff (i.e. your firmware doesn't offer that feature).
+Also note, the plugin currently does not level any relative X,Y,Z movements (`G91`).
 
 ## Setup
 
@@ -36,6 +37,9 @@ or manually using this URL:
 
 + The segment length option breaks up long moves into shorter ones that follow the height model at each of the endpoints.
     - Set the distance to 0.0 to disable this feature; otherwise, all moves longer than the specified length will be broken into smaller moves.
+
++ The arc segment length option breaks up arcs into arcs that follow the height model at the endpoints.
+    - Set the distance to 0.0 to disable this feature; otherwise, arcs will be converted to shorter arcs.
 
 + The calibration points are used to create a model of the surface.
     - Enter the x and y coordinate, then the measured z coordinate.
