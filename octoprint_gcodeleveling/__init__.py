@@ -181,7 +181,7 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 		return outLine
 
 	def break_up_arc(self, center, radius, arcAngle, arcLength):
-		numArcs = math.ceil(arcLength/self.arcSegDist)
+		numArcs = int(math.ceil(arcLength/self.arcSegDist))
 
 		arcSegAngle = arcAngle/numArcs
 
@@ -197,7 +197,7 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 		return outLines
 
 	def break_up_line(self):
-		numSegments = math.ceil(self.moveDist/self.lineBreakDist)
+		numSegments = int(math.ceil(self.moveDist/self.lineBreakDist))
 
 		eSeg = (self.eCurr-self.ePrev)/numSegments
 
