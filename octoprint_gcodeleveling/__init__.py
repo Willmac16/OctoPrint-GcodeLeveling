@@ -60,6 +60,7 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 		self.move_pattern = re.compile("^G[0-3]\s")
 		self.feed_pattern = re.compile("^F")
 		self.move_mode_pattern = re.compile("^G9[0-1]")
+		self.pos_reset_pattern = re.compile("^G92")
 		self.extruder_mode_pattern = re.compile("^M8[2-3]")
 		self.comment_pattern = re.compile(";.*$")
 
@@ -369,6 +370,38 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 						line = self.reconstruct_arc(arcI, arcJ, arcR)
 				else:
 					raise GcodeLevelingError("Arc values missing", "G2/G3 commands either need an R or an I or J")
+
+		# # TODO: Add in proper support for relative movements
+		if (re.match(self.pos_reset_pattern, line) is not None):
+			# Logic to seperate comments so they can be reattached after processing
+			if line.find(";") != -1:
+				comSplit = line.split(";")
+				activeCode = comSplit[0]
+				if len(comSplit) > 1:
+					for part in comSplit[1:]:
+						self.spareParts += ";" + part + " "
+			else:
+				activeCode = line
+
+			gcodeParts = re.split("\s", activeCode)
+
+			self.xPrev = self.xCurr
+			self.yPrev = self.yCurr
+			self.zPrev = self.zCurr
+
+			for part in gcodeParts[1:]:
+				if len(part) > 1:
+					leadChar = part[0]
+					if leadChar == "X":
+						self.xCurr = float(part[1:])
+					elif leadChar == 'Y':
+						self.yCurr = float(part[1:])
+					elif leadChar == 'Z':
+						self.zCurr = float(part[1:])
+					elif leadChar == 'E':
+						self.eCurr = float(part[1:])
+					else:
+						self.spareParts = part + " " + self.spareParts
 
 
 		# Check for movement mode
