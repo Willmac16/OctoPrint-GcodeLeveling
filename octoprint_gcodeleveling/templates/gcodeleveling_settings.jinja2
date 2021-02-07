@@ -1,77 +1,90 @@
-<form class="form-horizontal">
-    <div class="control-group">
-        <h3>Gcode Leveling Settings</h3>
-        <div>
-            <span class="help-inline"><span class="label label-info">Info:</span>
-                See <a href="https://github.com/Willmac16/OctoPrint-GcodeLeveling#Configuration" target="_blank">The Configuration section</a> for more info about configuring this plugin.
-            </span>
-        </div>
-        <div>
-            <span class="help-inline">{{ _('Polynomial Degrees of X')}}</span>
-            <div class="input-append">
+<h3>Gcode Leveling Settings</h3>
+    <span class="help-inline"><span class="label label-info">Info:</span>
+        See <a href="https://github.com/Willmac16/OctoPrint-GcodeLeveling#Configuration" target="_blank">The Configuration section</a>
+        for more info about configuring this plugin.
+    </span>
+    <form class="form-horizontal">
+        <div class="control-group">
+            <label class="control-label">{{ _('Surface Complexity X')}}</label>
+            <div class="controls">
                 <input type="number" class="input-mini text-right" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.modelDegree.x">
+                <span class="help-inline">Set this to 1 if you are unsure</span>
             </div>
-            <span class="help-inline">{{ _('Polynomial Degrees of Y')}}</span>
-            <div class="input-append">
+        </div>
+        <div class="control-group">
+            <label class="control-label">{{ _('Surface Complexity Y')}}</label>
+            <div class="controls">
                 <input type="number" class="input-mini text-right" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.modelDegree.y">
+                <span class="help-inline">Set this to 1 if you are unsure</span>
             </div>
         </div>
-        <div>
-            <span class="help-inline">{{ _('Minimum Z pos to Write')}}</span>
-            <div class="input-append">
-                <input type="number" class="input-mini text-right" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.zMin">
-            </div>
-            <span class="help-inline">{{ _('Maximum Z pos to Write')}}</span>
-            <div class="input-append">
-                <input type="number" step="0.001" class="input-mini text-right" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.zMax">
+        <div class="control-group">
+            <label class="control-label">{{ _('Minimum Z pos to Write')}}</label>
+            <div class="controls">
+                    <input type="number" class="input-mini text-right" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.zMin">
             </div>
         </div>
-        <div>
-            <span class="help-inline">{{ _('Invert GCODE File position addition')}}</span>
-            <div class="input-append">
-                <input type="checkbox" data-bind="checked: settingsViewModel.settings.plugins.gcodeleveling.invertPosition">
+        <div class="control-group">
+            <label class="control-label">{{ _('Maximum Z pos to Write')}}</label>
+            <div class="controls">
+                    <input type="number" step="0.001" class="input-mini text-right" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.zMax">
             </div>
         </div>
-        <div>
-            <span class="help-inline">{{ _('Create Unmodified Copy on Upload')}}</span>
-            <div class="input-append">
+        <div class="control-group">
+            <label class="control-label">{{ _('Length of Line Segments to Check')}}</label>
+            <div class="controls">
+                    <input type="number" step="0.001" class="input-mini text-right" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.lineBreakDist">
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label">{{ _('Length of Arc Segments to Check')}}</label>
+            <div class="controls">
+                    <input type="number" step="0.001" class="input-mini text-right" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.arcSegDist">
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label">{{ _('Create Unmodified Copy on Upload')}}</label>
+            <div class="controls">
                 <input type="checkbox" data-bind="checked: settingsViewModel.settings.plugins.gcodeleveling.unmodifiedCopy">
             </div>
         </div>
-        <div>
-            <span class="help-inline">{{ _('Length of Segments')}}</span>
-            <div class="input-append">
-                <input type="number" step="0.001" class="input-mini text-right" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.lineBreakDist">
+        <div class="control-group">
+            <label class="control-label">{{ _('Invert original Z in output')}}</label>
+            <div class="controls">
+                <input type="checkbox" data-bind="checked: settingsViewModel.settings.plugins.gcodeleveling.invertPosition">
             </div>
         </div>
-        <div>
-            <span class="help-inline">{{ _('Length of Arc Segments')}}</span>
-            <div class="input-append">
-                <input type="number" step="0.001" class="input-mini text-right" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.arcSegDist">
-            </div>
-        </div>
-        <button data-bind="click: safetyButton" style="visibility: hidden"></button>
-    </div>
-    <div class="control-group">
-        <h3>Points</h3>
-        <span class="help-inline"><span class="label label-info">Info:</span>
+    </form>
+    <h3>Points</h3>
+    <label><span class="label label-info">Info:</span>
             The calibration points are used to create a model of the surface.
             Enter the x and y coordinate, then the observed z coordinate.
-        </span>
-        <div data-bind="foreach: settingsViewModel.settings.plugins.gcodeleveling.points">
-
-            <div class="input-append">
-                <input type="number" step="0.001" class="input-mini text-right" data-bind="value: $data[0]">
-                <input type="number" step="0.001" class="input-mini text-right" data-bind="value: $data[1]">
-                <input type="number" step="0.001" class="input-mini text-right" data-bind="value: $data[2]">
+    </label>
+    <form class="form-horizontal">
+        <button data-bind="click: safetyButton" style="visibility: hidden"></button>
+        <div class="row-fluid">
+            <div class="span3">
+                <h4>X</h4>
             </div>
-            <button title="Remove Command Widget" class="btn btn-danger"
-            data-bind="click: $parent.removePoint, attr: { 'title': 'Remove Point' }"><i
-            class="fa fa-trash-o"></i>
-            </button>
+            <div class="span3">
+                <h4>Y</h4>
+            </div>
+            <div class="span3">
+                <h4>Z</h4>
+            </div>
         </div>
-        <button title="Add Point" class="btn btn-primary" data-bind="click: addPoint"><i
-        class="fa fa-plus"></i>
+        <div data-bind="foreach: settingsViewModel.settings.plugins.gcodeleveling.points">
+            <div class="row-fluid" style="margin-bottom: 5px">
+                <input type="number" step="0.001" class="input-mini text-right span3" data-bind="value: $data[0]">
+                <input type="number" step="0.001" class="input-mini text-right span3" data-bind="value: $data[1]">
+                <input type="number" step="0.001" class="input-mini text-right span3" data-bind="value: $data[2]">
+                <button title="Remove Command Widget" class="btn btn-danger"
+                    data-bind="click: $parent.removePoint, attr: { 'title': 'Remove Point' }">
+                    <i class="fa fa-trash-o"></i>
+                </button>
+            </div>
+        </div>
+        <button title="Add Point" class="btn btn-primary" data-bind="click: addPoint">
+            <i class="fa fa-plus"></i>
         </button>
-    </div>
-</form>
+    </form>

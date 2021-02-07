@@ -1,21 +1,19 @@
 # coding=utf-8
 from __future__ import absolute_import
 
+import re, sys, math, numpy as np
+
 import octoprint.plugin
 import octoprint.filemanager
 import octoprint.filemanager.util
-import octoprint_gcodeleveling.twoDimFit
-
 from octoprint.filemanager import FileDestinations
-
-import re
-import sys
-import math
-import numpy as np
-
 from octoprint.util.comm import strip_comment
 
-def rotate_vector(theta, vec):
+import octoprint_gcodeleveling.twoDimFit
+import octoprint_gcodeleveling.maxima
+
+
+def rotateVector(theta, vec):
 	rotArray = np.array(((math.cos(theta),-math.sin(theta)),(math.sin(theta),math.cos(theta))))
 	return np.matmul(rotArray, vec)
 
@@ -32,9 +30,11 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 		self.coeffs = coeffs
 		self.zMin = zMin
 		self.zMax = zMax
-		self.lineBreakDist = lineBreakDist
+		self.lineBreakDist = lineBreakDist**2
 		self.arcSegDist = arcSegDist
 		self.invertPosition = invertPosition
+
+		self.pwm = maxima.SingleGradientAscent()
 
 		self.moveCurr = "G0"
 
@@ -51,21 +51,38 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 
 		self.eMode = "None"
 		self.moveMode = "Absolute"
+		self.workspacePlane = 0
+
+		self.workspacePlanes = ["G17", "G18", "G19"]
 
 		self.spareParts = ""
 
 
 		self.afterStart = False
+		self.positionFloating = False
 
 		self.move_pattern = re.compile("^G[0-3]\s")
-		self.feed_pattern = re.compile("^F")
 		self.move_mode_pattern = re.compile("^G9[0-1]")
 		self.pos_reset_pattern = re.compile("^G92")
+		self.set_workspace_plane = re.compile("^G1[7-9]")
 		self.extruder_mode_pattern = re.compile("^M8[2-3]")
 		self.comment_pattern = re.compile(";.*$")
 
+	def comment_split(self, line):
+		# Logic to seperate comments so they can be reattached after processing
+		if line.find(";") != -1:
+			comSplit = line.split(";")
+			activeCode = comSplit[0]
+			if len(comSplit) > 1:
+				for part in comSplit[1:]:
+						self.spareParts += ";" + part + " "
+
+			return activeCode
+		else:
+			return line
+
 	def move_dist(self):
-		return ((self.xCurr-self.xPrev)**2 + (self.yCurr-self.yPrev)**2)**0.5
+		return (self.xCurr-self.xPrev)**2 + (self.yCurr-self.yPrev)**2
 
 	def get_z(self, x, y, zOffset):
 		zNew = twoDimFit.twoDpolyEval(self.coeffs, x, y) + (zOffset * (-1 if self.invertPosition else 1))
@@ -75,28 +92,17 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 			raise GcodeLevelingError("Computed Z was outside of bounds", "Gcode Leveling config likely needs to be changed")
 		return round(zNew, 3)
 
-	def construct_line(self, basePos, dirVector, seg):
+	def createLine(self, prev, pos, zVal, eVal):
 		outLine = self.moveCurr
 
-		xNew = basePos[0] + dirVector[0]*seg
-		yNew = basePos[1] + dirVector[1]*seg
-		zOffset = basePos[2] + dirVector[2]*seg
+		if pos[0] != prev[0]:
+				outLine += " X" + str(round(pos[0], 3))
+		if pos[1] != prev[1]:
+				outLine += " Y" + str(round(pos[1], 3))
+		outLine += " Z" + str(self.get_z(pos[0], pos[1], zVal))
 
-
-		if xNew != self.xPrev:
-			outLine += " X" + str(round(xNew, 3))
-		if yNew != self.yPrev:
-			outLine += " Y" + str(round(yNew, 3))
-		outLine += " Z" + str(self.get_z(xNew, yNew, zOffset))
-
-		if (self.eMode == "Absolute"):
-			eNew = basePos[3] + dirVector[3]*seg
-			outLine += " E" + str(round(eNew, 5))
-		elif (self.eMode == "Relative"):
-			eNew = dirVector[3]
-			outLine += " E" + str(round(eNew, 5))
-
-
+		if self.eMode != "None":
+				outLine += " E" + str(round(eVal, 5))
 
 		outLine += " " + self.spareParts
 		self.spareParts = ""
@@ -105,31 +111,23 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 
 		return outLine
 
-	def construct_arc(self, center, baseRadius, arcSegAngle, arcNum, eSeg, zSeg):
+	def createArc(self, start, center, angle, eVal, zVal):
 		outLine = self.moveCurr
 
-		offsetNew = rotate_vector(arcSegAngle*arcNum, baseRadius)
+		radius = start - center
 
-		posNew = center + rotate_vector(arcSegAngle*(arcNum+1), baseRadius)
+		end = center + rotateVector(angle, radius)
 
-		zOffset = self.zPrev + zSeg*(arcNum+1)
+		if end[0] != start[0]:
+			outLine += " X" + str(round(end[0], 3))
+		if end[1] != start[1]:
+			outLine += " Y" + str(round(end[1], 3))
+		outLine += " Z" + str(self.get_z(end[0], end[1], zVal))
 
-		outLine += " X" + str(round(posNew[0], 3))
-		outLine += " Y" + str(round(posNew[1], 3))
-		outLine += " Z" + str(self.get_z(posNew[0], posNew[1], zOffset))
-
-		outLine += " I" + str(round(-offsetNew[0], 3))
-		outLine += " J" + str(round(-offsetNew[1], 3))
-
-
-
-		if (self.eMode == "Absolute"):
-			eNew = basePos[3] + dirVector[3]*seg
-			outLine += " E" + str(round(eNew, 5))
-		elif (self.eMode == "Relative"):
-			eNew = dirVector[3]
-			outLine += " E" + str(round(eNew, 5))
-
+		outLine += " I" + str(round(-radius[0], 3))
+		outLine += " J" + str(round(-radius[1], 3))
+		if self.eMode != "None":
+			outLine += " E" + str(round(eVal, 5))
 		outLine += " " + self.spareParts
 		self.spareParts = ""
 
@@ -180,40 +178,7 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 
 		return outLine
 
-	def break_up_arc(self, center, radius, arcAngle, arcLength):
-		numArcs = int(math.ceil(arcLength/self.arcSegDist))
-
-		arcSegAngle = arcAngle/numArcs
-
-		eSeg = (self.eCurr-self.ePrev)/numArcs
-
-		zSeg = (self.zCurr-self.zPrev)/numArcs
-
-		outLines = ""
-
-		for arc in range(0, numArcs):
-			outLines += self.construct_arc(center, radius, arcSegAngle, arc, eSeg, zSeg)
-
-		return outLines
-
-	def break_up_line(self):
-		numSegments = int(math.ceil(self.moveDist/self.lineBreakDist))
-
-		eSeg = (self.eCurr-self.ePrev)/numSegments
-
-		xSeg = (self.xCurr-self.xPrev)/numSegments
-		ySeg = (self.yCurr-self.yPrev)/numSegments
-		zSeg = (self.zCurr-self.zPrev)/numSegments
-
-		outLines = ""
-
-		for seg in range(1, numSegments+1):
-			outLines += self.construct_line((self.xPrev, self.yPrev, self.zPrev, self.ePrev), (xSeg, ySeg, zSeg, eSeg), seg)
-
-		return outLines
-
 	def process_line(self, origLine):
-
 		if not len(origLine):
 			return None
 
@@ -223,17 +188,8 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 			line = origLine
 
 		# Check for standard Movement commands
-		if (re.match(self.move_pattern, line) is not None) and (self.moveMode != "Relative"):
-			# Logic to seperate comments so they can be reattached after processing
-			if line.find(";") != -1:
-				comSplit = line.split(";")
-				activeCode = comSplit[0]
-				if len(comSplit) > 1:
-					for part in comSplit[1:]:
-						self.spareParts += ";" + part + " "
-			else:
-				activeCode = line
-
+		if re.match(self.move_pattern, line) is not None and self.moveMode != "Relative" and not self.positionFloating:
+			activeCode = self.comment_split(line)
 			gcodeParts = re.split("\s", activeCode)
 
 			self.xPrev = self.xCurr
@@ -265,7 +221,6 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 							self.eMode = "Absolute"
 							self.ePrev = self.eCurr
 
-
 						self.eCurr = float(part[1:])
 					elif leadChar == 'I':
 						arcI = float(part[1:])
@@ -276,18 +231,27 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 					else:
 						self.spareParts = part + " " + self.spareParts
 
-
 			if self.moveCurr == "G0" or self.moveCurr == "G1":
-
 				self.moveDist = self.move_dist()
 
-				# self.afterStart ensures that the first move isn't broken up and doesnt start at 0, 0, 0
-				if (self.afterStart and self.moveDist > self.lineBreakDist and self.lineBreakDist != 0.0):
-					line = self.break_up_line()
+				if (self.moveDist > self.lineBreakDist and self.lineBreakDist != 0.0 and self.afterStart):
+					line = ""
+					start = np.array([self.xPrev, self.yPrev])
+					end = np.array([self.xCurr, self.yCurr])
+
+					for s, e in maxima.lineWiseMaxima(self.coeffs, start, end, self.pwm):
+						eVal = 0.0
+						if (self.eMode == "Absolute"):
+								eVal = self.ePrev + (self.eCurr-self.ePrev) * np.linalg.norm(e - start) / np.linalg.norm(end - start)
+						elif (self.eMode == "Relative"):
+								eVal = self.eCurr * np.linalg.norm(e - s) / np.linalg.norm(end - start)
+						zVal = self.zPrev + (self.zCurr - self.zPrev)*np.linalg.norm(e - start) / np.linalg.norm(end - start)
+
+						line += self.createLine(s, e, zVal, eVal)
 				else:
 					self.afterStart = True
 					line = self.reconstruct_line()
-			else:
+			elif self.workspacePlane == 0:
 				# Handling for Gcode files that do not give a pos before the arc
 				if not self.afterStart:
 					self.zPrev = self.get_z(self.xPrev, self.yPrev, 0.0)*(self.invertPosition*2 - 1)
@@ -306,7 +270,6 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 					eA = np.array((endArm[0], endArm[1], 0.0))
 
 
-
 					# figure out exit angle
 					normalizedCross = np.cross(r, eA)/(np.linalg.norm(radius)*np.linalg.norm(endArm))
 					# alpha = math.asin(normalizedCross[2])
@@ -315,23 +278,32 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 
 					longPath = (self.moveCurr == "G3") != (normalizedCross[2] > 0)
 
+					arcAngle = 0.0
 					if longPath:
 						arcAngle = 2*math.pi-alpha
 					else:
 						arcAngle = alpha
 
-					# compute the arc length
-					arcLength = np.linalg.norm(radius) * arcAngle
-
 					if self.moveCurr == "G2":
 						arcAngle *= -1
 
+					# self._logger.info("Arc Angle {}".format(arcAngle))
+					arcLength = np.linalg.norm(radius) * arcAngle
 
-					# slice up arc
-					if self.arcSegDist != 0.0 and arcLength > self.arcSegDist:
-						line = self.break_up_arc(center, radius, arcAngle, arcLength)
+					if (self.arcSegDist != 0.0 and arcLength >= self.arcSegDist):
+						line = ""
+
+						for s, c, a, qin, qend in maxima.flatArcWiseMaxima(self.coeffs, center, radius, arcAngle, 0, 1, self.pwm):
+							if (self.eMode == "Absolute"):
+								eVal = self.ePrev + (self.eCurr-self.ePrev) * qend
+							elif (self.eMode == "Relative"):
+								eVal = self.eCurr * (qend-qin)
+							zVal = qend*(self.zCurr - self.zPrev) + self.zPrev
+
+							line += self.createArc(s, c, a, eVal, zVal)
 					else:
-						line = self.reconstruct_arc(arcI, arcJ, arcR)
+						self.reconstruct_arc(arcI, arcJ, arcR)
+
 				elif arcR:
 					# figure out the center point
 					prev = np.array((self.xPrev, self.yPrev))
@@ -357,32 +329,31 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 					# figure out exit angle
 					arcAngle = math.acos(np.dot(pArm, cArm)/(np.linalg.norm(pArm)*np.linalg.norm(cArm)))
 
-					# compute the arc length
-					arcLength = arcAngle * arcR
+					arcLength = arcR * arcAngle
 
 					if self.moveCurr == "G2":
 						arcAngle *= -1
 
-					# slice up arc
-					if self.arcSegDist != 0.0 and arcLength > self.arcSegDist:
-						line = self.break_up_arc(center, pArm, arcAngle, arcLength)
+					if (self.arcSegDist != 0.0 and arcLength >= self.arcSegDist):
+						line = ""
+
+						for s, c, a, qin, qend in maxima.flatArcWiseMaxima(self.coeffs, center, radius, arcAngle, 0, 1, self.pwm):
+							if (self.eMode == "Absolute"):
+								eVal = self.ePrev + (self.eCurr-self.ePrev) * qend
+							elif (self.eMode == "Relative"):
+								eVal = self.eCurr * (qend-qin)
+							zVal = qend*(self.zCurr - self.zPrev) + self.zPrev
+
+							line += self.createArc(s, c, a, eVal, zVal)
 					else:
-						line = self.reconstruct_arc(arcI, arcJ, arcR)
+						self.reconstruct_arc(arcI, arcJ, arcR)
+
 				else:
-					raise GcodeLevelingError("Arc values missing", "G2/G3 commands either need an R or an I or J")
+						raise GcodeLevelingError("Arc values missing", "G2/G3 commands either need an R or an I or J")
 
 		# # TODO: Add in proper support for relative movements
-		if (re.match(self.pos_reset_pattern, line) is not None):
-			# Logic to seperate comments so they can be reattached after processing
-			if line.find(";") != -1:
-				comSplit = line.split(";")
-				activeCode = comSplit[0]
-				if len(comSplit) > 1:
-					for part in comSplit[1:]:
-						self.spareParts += ";" + part + " "
-			else:
-				activeCode = line
-
+		elif (re.match(self.pos_reset_pattern, line) is not None):
+			activeCode = self.comment_split(line)
 			gcodeParts = re.split("\s", activeCode)
 
 			self.xPrev = self.xCurr
@@ -392,22 +363,15 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 			for part in gcodeParts[1:]:
 				if len(part) > 1:
 					leadChar = part[0]
-					if leadChar == "X":
-						self.xCurr = float(part[1:])
-					elif leadChar == 'Y':
-						self.yCurr = float(part[1:])
-					elif leadChar == 'Z':
-						self.zCurr = float(part[1:])
+					if leadChar == "X" or leadChar == 'Y' or leadChar == 'Z':
+						self.posFloating = True
 					elif leadChar == 'E':
 						self.eCurr = float(part[1:])
-					else:
-						self.spareParts = part + " " + self.spareParts
 
-
+			return origLine
 		# Check for movement mode
-		if re.match(self.move_mode_pattern, line) is not None:
+		elif re.match(self.move_mode_pattern, line) is not None:
 			line = re.sub(self.comment_pattern, "", line)
-
 			mode = re.split("\s", line)[0]
 
 			if mode == "G90":
@@ -415,12 +379,12 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 			elif mode == "G91":
 				self.moveMode = "Relative"
 
+			# self._logger.info("Line sets move mode " + self.moveMode)
 			return origLine
 
 		# Check for extruder movement mode
-		if re.match(self.extruder_mode_pattern, line) is not None:
+		elif re.match(self.extruder_mode_pattern, line) is not None:
 			line = re.sub(self.comment_pattern, "", line)
-
 			mode = re.split("\s", line)[0]
 
 			if mode == "M82":
@@ -428,6 +392,15 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 			elif mode == "M83":
 				self.eMode = "Relative"
 
+			# self._logger.info("Line sets extruder mode " + self.eMode)
+			return origLine
+
+		# Check for workspace switches
+		elif re.match(self.set_workspace_plane, line) is not None:
+			line = re.sub(self.comment_pattern, "", line)
+			mode = re.split("\s", line)[0]
+
+			self.workspacePlane = workspacePlanes.index(mode)
 			return origLine
 
 		if (self.python_version == 3):
