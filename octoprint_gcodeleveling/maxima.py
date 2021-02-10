@@ -2,12 +2,9 @@ import math, random, time
 import numpy as np
 from octoprint_gcodeleveling.twoDimFit import twoDpolyEval
 
-
-from abc import ABC, abstractmethod
-
 threshold = 0.005
 
-class PathWiseMaximizer(ABC):
+class PathWiseMaximizer():
 
 	def optimize(self, value, first, second):
 		pass
@@ -18,67 +15,6 @@ class PathWiseMaximizer(ABC):
 			return (q, v)
 		else:
 			return (False, False)
-
-class Spaceshot(PathWiseMaximizer):
-	def __init__(self, shots):
-		self.shots = shots
-		self.max = None
-		self.maxQ = None
-
-	def optimize(self, value, first, second):
-		self.maxQ = None
-		self.max = 0
-		for shot in range(self.shots):
-			q = shot/self.shots
-			tp, tv = self.testPoint(value, q)
-			if (tp and tv > self.max):
-				self.maxQ = tp
-				self.max = tv
-		return self.maxQ
-
-class Scatershot(PathWiseMaximizer):
-	def __init__(self, shots):
-		self.shots = shots
-		self.max = None
-		self.maxQ = None
-
-	def optimize(self, value, first, second):
-		self.maxQ = None
-		self.max = 0
-		for shot in range(self.shots):
-			q = random.random()
-			tp, tv = self.testPoint(value, q)
-			if (tp and tv > self.max):
-				self.maxQ = tp
-				self.max = tv
-		return self.maxQ
-
-class SinglePointNewton(PathWiseMaximizer):
-	def __init__(self, height=0.00001, telos=0.1, point=0.5):
-		self.hMin = height
-		self.telos = telos
-		self.point = point
-
-	def optimize(self, value, first, second):
-				q = self.point
-
-				lvl = 1
-				height = 10
-				while (abs(height) > self.hMin):
-					slope = second(q)
-					if (slope != 0.0):
-						height = first(q)
-						q = -height/slope + q
-						lvl += 1
-					else:
-						break
-
-				if (q > self.telos and q < 1-self.telos):
-					tp, _ = self.testPoint(value, q)
-					if tp:
-						return tp
-					else:
-						return None
 
 class SingleGradientAscent(PathWiseMaximizer):
 	def __init__(self, ds=0.00001, step=10.0, telos=0.01, point=0.5, lvl=200):
@@ -97,33 +33,6 @@ class SingleGradientAscent(PathWiseMaximizer):
 			slope = first(q)
 			# print(lvl, q, slope)
 			q += slope*self.step
-			lvl += 1
-
-		if (q > self.telos and q < 1-self.telos):
-			tp, tv = self.testPoint(value, q)
-			if (tp):
-				return tp
-			else:
-				return None
-		else:
-			return None
-
-class DynastepSingleGradientAscent(PathWiseMaximizer):
-	def __init__(self, ds=0.00001, step=10.0, telos=0.01, point=0.5, lvl=500):
-		self.sMin = ds
-		self.step = step
-		self.telos = telos
-		self.point = point
-		self.lvl = lvl
-
-	def optimize(self, value, first, second):
-		q = self.point
-
-		lvl = 0
-		slope = 10
-		while (abs(slope) > self.sMin and q > self.telos and q < 1-self.telos and lvl < self.lvl):
-			slope = first(q)
-			q += slope*self.step*math.exp(-lvl)
 			lvl += 1
 
 		if (q > self.telos and q < 1-self.telos):
