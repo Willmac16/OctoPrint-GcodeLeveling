@@ -55,6 +55,155 @@
             </div>
         </div>
     </form>
+
+    <h3>Auto Probing</h3>
+    <label><span class="label label-info">Info:</span>
+            Configure the plugin to probe a grid, then press the grid button below to run the probing routine.
+    </label>
+    <!-- Point Probing -->
+    <form class="form-horizontal">
+        <div class="control-group">
+            <span class="control-label">{{ _('Probe Regex:')}}</span>
+            <div class="controls">
+                <input type="text" class= "input-block-level" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.probeRegex"/>
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label">{{ _('Probe Position Gcode:')}}</label>
+            <div class="controls">
+                <input type="text" class= "input-block-level" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.probePosCmd"/>
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label">{{ _('Home Gcode:')}}</label>
+            <div class="controls">
+                <input type="text" class= "input-block-level" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.homeCmd"/>
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label">{{ _('Probe Feedrate:')}}</label>
+            <div class="controls">
+                <div class="input-append">
+                    <input type="number" class="input-mini" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.probeFeedrate" step=1/>
+                    <span class="add-on">mm/min</span>
+                </div>
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label">{{ _('X:')}}</label>
+            <div class="controls">
+                <div class="input-append">
+                    <input type="number" class="input-mini" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.x" step=1/>
+                    <span class="add-on">points</span>
+                </div>
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label">{{ _('Y:')}}</label>
+            <div class="controls">
+                <div class="input-append">
+                    <input type="number" class="input-mini" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.y" step=1/>
+                    <span class="add-on">points</span>
+                </div>
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label">{{ _('X Min:')}}</label>
+            <div class="controls">
+                <div class="input-append">
+                    <input type="number" class="input-medium" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.xMin" step=0.001/>
+                    <span class="add-on">mm</span>
+                </div>
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label">{{ _('X Max:')}}</label>
+            <div class="controls">
+                <div class="input-append">
+                    <input type="number" class="input-medium" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.xMax" step=0.001/>
+                    <span class="add-on">mm</span>
+                </div>
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label">{{ _('Y Min:')}}</label>
+            <div class="controls">
+                <div class="input-append">
+                    <input type="number" class="input-medium" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.yMin" step=0.001/>
+                    <span class="add-on">mm</span>
+                </div>
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label">{{ _('Y Max:')}}</label>
+            <div class="controls">
+                <div class="input-append">
+                    <input type="number" class="input-medium" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.yMax" step=0.001/>
+                    <span class="add-on">mm</span>
+                </div>
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label">{{ _('Clear Z:')}}</label>
+            <div class="controls">
+                <div class="input-append">
+                    <input type="number" class="input-medium" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.clearZ" step=0.001/>
+                    <span class="add-on">mm</span>
+                </div>
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label">{{ _('Probe Z:')}}</label>
+            <div class="controls">
+                <div class="input-append">
+                    <input type="number" class="input-medium" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.probeZ" step=0.001/>
+                    <span class="add-on">mm</span>
+                </div>
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label">{{ _('Final Z:')}}</label>
+            <div class="controls">
+                <div class="input-append">
+                    <input type="number" class="input-medium" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.finalZ" step=0.001/>
+                    <span class="add-on">mm</span>
+                </div>
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label">{{ _('X Offset:')}}</label>
+            <div class="controls">
+                <div class="input-append">
+                    <input type="number" class="input-medium" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.xOffset" step=0.001/>
+                    <span class="add-on">mm</span>
+                </div>
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label">{{ _('Y Offset:')}}</label>
+            <div class="controls">
+                <div class="input-append">
+                    <input type="number" class="input-medium" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.yOffset" step=0.001/>
+                    <span class="add-on">mm</span>
+                </div>
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label">{{ _('Z Offset:')}}</label>
+            <div class="controls">
+                <div class="input-append">
+                    <input type="number" class="input-medium" data-bind="value: settingsViewModel.settings.plugins.gcodeleveling.zOffset" step=0.001/>
+                    <span class="add-on">mm</span>
+                </div>
+            </div>
+        </div>
+        <div class="control-group">
+            <button title="Probe" class="btn btn-primary span1 pull-right" data-bind="click: probe, enable: loginState.hasPermissionKo(access.permissions.CONTROL)">
+                <i class="fa fa-border-all"></i>
+            </button>
+        </div>
+    </form>
+
     <h3>Points</h3>
     <label><span class="label label-info">Info:</span>
             The calibration points are used to create a model of the surface.

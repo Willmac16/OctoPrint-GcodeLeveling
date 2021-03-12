@@ -65,6 +65,17 @@ or manually using this URL:
 + The calibration points are used to create a model of the surface.
     - Enter the x and y coordinate, then the measured z coordinate.
 
+### Auto Probing
++ Probing automatically probes a grid for the surface points.
+    - Probe Regex is used to properly convert whatever your firmware converts into points this plugin can use.
+        * For example: if your marlin firmware returns `ok X:200.0 Y:40.0 Z:10.0 E:0.0 Count: A:20000 B:4000 C:1000`
+        * `^ok X:(?P<x>[0-9]+\.[0-9]+) Y:(?P<y>[0-9]+\.[0-9]+) Z:(?P<z>[0-9]+\.[0-9]+)` would return the 3 position values to the plugin
+        * GRBL: `\[PRB:(?P<x>[0-9]+\.[0-9]{3}),(?P<y>[0-9]+\.[0-9]{3}),(?P<z>[0-9]+\.[0-9]+):1\]`
+        * If you are crafting your own regex, make sure that each pos value gets its own regex group labeling each pos with the correct id `?P<x>` for x.
+    - Probe Position Command is run to ask your firmware for the position when the probe triggers
+        * `M114` should work for marlin
+        * This can be left blank for GRBL since it will autoreport the probe position
+
 ## Performance
 
 + Due to the current implementation of this plugin, it will cause the interface to hang while processing a file upload.

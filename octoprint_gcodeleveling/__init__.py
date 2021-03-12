@@ -7,7 +7,8 @@ import octoprint.plugin
 import octoprint.filemanager
 import octoprint.filemanager.util
 from octoprint.filemanager import FileDestinations
-from octoprint.util.comm import strip_comment
+
+from octoprint.access.permissions import Permissions
 
 import octoprint_gcodeleveling.twoDimFit
 import octoprint_gcodeleveling.maxima
@@ -188,7 +189,7 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 			line = origLine
 
 		# Check for standard Movement commands
-		if re.match(self.move_pattern, line) is not None and self.moveMode != "Relative" and not self.positionFloating:
+		if self.move_pattern.match(line) is not None and self.moveMode != "Relative" and not self.positionFloating:
 			activeCode = self.comment_split(line)
 			gcodeParts = re.split("\s", activeCode)
 
@@ -352,7 +353,7 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 						raise GcodeLevelingError("Arc values missing", "G2/G3 commands either need an R or an I or J")
 
 		# # TODO: Add in proper support for relative movements
-		elif (re.match(self.pos_reset_pattern, line) is not None):
+		elif (self.pos_reset_pattern.match(line) is not None):
 			activeCode = self.comment_split(line)
 			gcodeParts = re.split("\s", activeCode)
 
@@ -370,7 +371,7 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 
 			return origLine
 		# Check for movement mode
-		elif re.match(self.move_mode_pattern, line) is not None:
+		elif self.move_mode_pattern.match(line) is not None:
 			line = re.sub(self.comment_pattern, "", line)
 			mode = re.split("\s", line)[0]
 
@@ -383,7 +384,7 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 			return origLine
 
 		# Check for extruder movement mode
-		elif re.match(self.extruder_mode_pattern, line) is not None:
+		elif self.extruder_mode_pattern.match(line) is not None:
 			line = re.sub(self.comment_pattern, "", line)
 			mode = re.split("\s", line)[0]
 
@@ -396,7 +397,7 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 			return origLine
 
 		# Check for workspace switches
-		elif re.match(self.set_workspace_plane, line) is not None:
+		elif self.set_workspace_plane.match(line) is not None:
 			line = re.sub(self.comment_pattern, "", line)
 			mode = re.split("\s", line)[0]
 
@@ -411,8 +412,10 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 						  octoprint.plugin.SettingsPlugin,
 						  octoprint.plugin.AssetPlugin,
-						  octoprint.plugin.TemplatePlugin):
+						  octoprint.plugin.TemplatePlugin,
+						  octoprint.plugin.SimpleApiPlugin):
 
+	checkForProbe = 0
 
 	def createFilePreProcessor(self, path, file_object, blinks=None, printer_profile=None, allow_overwrite=True, *args, **kwargs):
 		if self.pointsEntered:
@@ -447,32 +450,6 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 
 			return file_object
 
-	def update_from_settings(self):
-		points = self._settings.get(['points'])
-
-		allZeros = True
-		for point in points:
-			for coor in point:
-				if coor != 0.0:
-					allZeros = False
-
-		self.pointsEntered = not allZeros
-
-		if self.pointsEntered:
-			self.zMin = float(self._settings.get(['zMin']))
-			self.zMax = float(self._settings.get(['zMax']))
-			self.lineBreakDist = float(self._settings.get(['lineBreakDist']))
-			self.arcSegDist = float(self._settings.get(['arcSegDist']))
-			self.modelDegree = self._settings.get(['modelDegree'])
-			self.invertPosition = bool(self._settings.get(['invertPosition']))
-			self.unmodifiedCopy = bool(self._settings.get(['unmodifiedCopy']))
-
-			self.coeffs = twoDimFit.twoDpolyFit(points, int(self.modelDegree['x']), int(self.modelDegree['y']))
-			self._logger.info("Leveling Model Computed")
-		else:
-			self._logger.info("Points have not been entered (or they are all zero). Enter points or disable this plugin if you do not need it.")
-
-
 	# ~~ StartupPlugin mixin
 
 	def on_after_startup(self):
@@ -498,13 +475,56 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 			"lineBreakDist": 10.0,
 			"arcSegDist": 15.0,
 			"invertPosition": False,
-			"unmodifiedCopy": True
+			"unmodifiedCopy": True,
+			'x': 5,
+			'y': 5,
+			'xMin': 0.0,
+			'yMin': 0.0,
+			'xMax': 200.0,
+			'yMax': 200.0,
+			'clearZ': 10.0,
+			'probeZ': -2.5,
+			"probeRegex": "^ok X:(?P<x>[0-9]+\.[0-9]+) Y:(?P<y>[0-9]+\.[0-9]+) Z:(?P<z>[0-9]+\.[0-9]+)",
+			"probePosCmd": "M114",
+			"homeCmd": "$H",
+			"probeFeedrate": 200.0,
+			'xOffset': 0.0,
+			'yOffset': 0.0,
+			'zOffset': 0.0,
+			'finalZ': 100.0
 		}
-
 	def on_settings_save(self, data):
 		octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
 
 		self.update_from_settings()
+
+	def update_from_settings(self):
+		points = self._settings.get(['points'])
+		self._logger.debug(points)
+
+		allZeros = True
+		for point in points:
+			for coor in point:
+				if coor != 0.0:
+					allZeros = False
+
+		self.pointsEntered = not allZeros
+
+		if self.pointsEntered:
+			self.zMin = self._settings.get_float(['zMin'])
+			self.zMax = self._settings.get_float(['zMax'])
+			self.lineBreakDist = self._settings.get_float(['lineBreakDist'])
+			self.arcSegDist = self._settings.get_float(['arcSegDist'])
+			self.modelDegree = self._settings.get(['modelDegree'])
+			self.invertPosition = self._settings.get_boolean(['invertPosition'])
+			self.unmodifiedCopy = self._settings.get_boolean(['unmodifiedCopy'])
+
+			self.coeffs = twoDimFit.twoDpolyFit(points, int(self.modelDegree['x']), int(self.modelDegree['y']))
+			self._logger.info("Leveling Model Computed")
+			self._logger.debug(self.coeffs)
+		else:
+			self._logger.info("Points have not been entered (or they are all zero). Enter points or disable this plugin if you do not need it.")
+
 
 	def get_settings_version(self):
 		return 0
@@ -544,6 +564,81 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 			)
 		)
 
+	##~~ SimpleAPIPlugin mixin
+	def get_api_commands(self):
+		return dict(
+			probe=['x', 'y', 'xMin', 'yMin', 'xMax', 'yMax', 'clearZ', 'probeZ', 'probeRegex', 'probePosCmd', 'homeCmd', 'probeFeedrate', 'xOffset', 'yOffset', 'zOffset', 'finalZ'],
+			test=[]
+		)
+
+	def on_api_command(self, command, data):
+		if command == "test":
+			self._logger.info("test called")
+		elif command == "probe":
+			if Permissions.CONTROL.can() and self._printer.is_ready():
+				self.probeRegex = re.compile(data['probeRegex'])
+				self.probePosCmd = data['probePosCmd']
+
+				self.offset = (float(data['xOffset']), float(data['yOffset']), float(data['zOffset']))
+
+
+				self._logger.info("Probing Matrix")
+				# self._printer.home(("x", "y"))
+				self._printer.commands("G0 F{}".format(data['probeFeedrate']))
+				self._printer.commands(data['homeCmd'])
+
+				self.points = []
+
+				xCount = int(data['x'])
+				yCount = int(data['y'])
+
+				xMin = float(data['xMin'])
+				yMin = float(data['yMin'])
+				xMax = float(data['xMax'])
+				yMax = float(data['yMax'])
+
+				xDiff = xMax-xMin
+				yDiff = yMax-yMin
+
+				forward = True
+				for xProbe in range(xCount + 1):
+					x = xMin + xProbe * xDiff / xCount
+
+					for yProbe in range(yCount + 1):
+						if forward:
+							y = yMin + yProbe * yDiff / yCount
+						else:
+							y = yMax - yProbe * yDiff / yCount
+						self._printer.commands("G0 X{} Y{} Z{}".format(x, y, data['clearZ']))
+						self._printer.commands("G38.2 Z{}".format(data['probeZ']))
+						if self.probePosCmd != "":
+							self._printer.commands(self.probePosCmd)
+						self._printer.commands("G0 X{} Y{} Z{}".format(x, y, data['clearZ']))
+
+						self.checkForProbe += 1
+
+					forward = not forward
+				self._printer.commands("G0 X0 Y0 Z{}".format(data['finalZ']))
+			else:
+				self._logger.info("cannot probe since perm is missing")
+
+	##~~ Received Gcode Hook
+	def parseReceived(self, comm_instance, line):
+		if self.checkForProbe > 0:
+			mat = self.probeRegex.match(line)
+			if mat:
+				self._logger.debug(mat.groups())
+				self.points.append((float(mat.group('x'))-self.offset[0], float(mat.group('y'))-self.offset[1], float(mat.group('z'))-self.offset[2]))
+				self.checkForProbe -= 1
+				if self.checkForProbe == 0:
+					self._logger.debug(self.points)
+					self._logger.info("Saving auto-probed points")
+					self._settings.save(['points'], self.points)
+					self.update_from_settings()
+
+		return line
+
+
 __plugin_name__ = "Gcode Leveling"
 
 __plugin_pythoncompat__ = ">=2.7,<4" # python 2 and 3
@@ -555,5 +650,6 @@ def __plugin_load__():
 	global __plugin_hooks__
 	__plugin_hooks__ = {
 		"octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information,
-		"octoprint.filemanager.preprocessor": __plugin_implementation__.createFilePreProcessor
+		"octoprint.filemanager.preprocessor": __plugin_implementation__.createFilePreProcessor,
+		"octoprint.comm.protocol.gcode.received": __plugin_implementation__.parseReceived
 	}
