@@ -25,6 +25,6 @@ clean:
 
 send:
 	git-scp faker "~/.octoprint/plugins/OctoPrint-GcodeLeveling" -y
-	ssh faker "source ~/oprint/bin/activate && cd ~/.octoprint/plugins/OctoPrint-GcodeLeveling && octoprint dev plugin:install"
+	ssh faker "source ~/oprint/bin/activate && cd ~/.octoprint/plugins/OctoPrint-GcodeLeveling && make install"
 	ssh faker sudo service octoprint restart
 	ssh faker tail -f .octoprint/logs/octoprint.log

@@ -52,6 +52,55 @@ $(function() {
         self.safetyButton = function() {
             return
         }
+        self.onDataUpdaterPluginMessage = function(plugin, data) {
+            if (plugin === "gcodeleveling") {
+                if (data.state === "startProbing") {
+                    self.probePoints = data.totalPoints;
+                    self.probingNotify = new PNotify({
+                        title: 'Started Probing',
+                        type: 'info',
+                        text: `Currently Homing: @ Point (0/${self.probePoints})`,
+                        hide: false
+                    });
+                } else if (data.state === "updateProbing") {
+                    if (!self.probingNotify) {
+                        self.probePoints = data.totalPoints;
+                        self.probingNotify = new PNotify({
+                            title: 'Probing',
+                            type: 'info',
+                            text: `@ Point (${data.currentPoint}/${self.probePoints})`,
+                            hide: false
+                        });
+                    } else {
+                        pointUpdate = {
+                            title: 'Probing',
+                            text: `@ Point (${data.currentPoint}/${self.probePoints})`
+                        }
+                        self.probingNotify.update(pointUpdate);
+                    }
+                } else if (data.state === "finishedProbing") {
+                    if (!self.probingNotify) {
+                        self.probePoints = data.totalPoints;
+                        self.probingNotify = new PNotify({
+                            title: 'Finished Probing',
+                            type: 'info',
+                            text: `${self.probePoints} were probed and saved`,
+                            hide: false
+                        });
+                    } else {
+                        finishUpdate = {
+                            title: 'Finished Probing',
+                            text: `${self.probePoints} points were probed and saved`
+                        }
+                        self.probingNotify.update(finishUpdate);
+                    }
+                }
+            }
+        }
+
+        self.onDataUpdaterReconnect = function () {
+            self.notifies = {};
+        }
     }
 
     /* view model class, parameters for constructor, container to bind to

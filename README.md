@@ -95,3 +95,9 @@ or manually using this URL:
     + This is done with a path-wise gradient ascent; in other words, the plugin follows the derivative of surface model in the direction of the movement to find the maximum distance deviation point.
     + This allows for smaller files sizes since movements are only broken up when necessary; however, this does require additional computation during the file preprocessing stage.
 * After file preprocessing, the plugin's work is done, and the file behaves like any other gcode file.
+
+## Donating (optional)
+If you enjoy this plugin and would like to give me a tip, here is my [PayPal][paypal-me].   [![Tip via PayPal][paypal-button]][paypal-me]
+
+[paypal-button]: https://img.shields.io/badge/Donate-PayPal-green.svg
+[paypal-me]: https://www.paypal.me/WillMacCormack

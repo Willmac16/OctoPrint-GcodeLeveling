@@ -493,6 +493,7 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 			'zOffset': 0.0,
 			'finalZ': 100.0
 		}
+
 	def on_settings_save(self, data):
 		octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
 
@@ -591,6 +592,12 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 
 				xCount = int(data['x'])
 				yCount = int(data['y'])
+				self.checkForProbe = 0
+				self.probePoints = xCount*yCount
+
+				self._plugin_manager.send_plugin_message("gcodeleveling", dict(state='startProbing', totalPoints=self.probePoints))
+
+
 
 				xMin = float(data['xMin'])
 				yMin = float(data['yMin'])
@@ -601,14 +608,14 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 				yDiff = yMax-yMin
 
 				forward = True
-				for xProbe in range(xCount + 1):
-					x = xMin + xProbe * xDiff / xCount
+				for xProbe in range(xCount):
+					x = xMin + xProbe * xDiff / (xCount-1)
 
-					for yProbe in range(yCount + 1):
+					for yProbe in range(yCount):
 						if forward:
-							y = yMin + yProbe * yDiff / yCount
+							y = yMin + yProbe * yDiff / (yCount-1)
 						else:
-							y = yMax - yProbe * yDiff / yCount
+							y = yMax - yProbe * yDiff / (yCount-1)
 						self._printer.commands("G0 X{} Y{} Z{}".format(x, y, data['clearZ']))
 						self._printer.commands("G38.2 Z{}".format(data['probeZ']))
 						if self.probePosCmd != "":
@@ -618,6 +625,7 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 						self.checkForProbe += 1
 
 					forward = not forward
+
 				self._printer.commands("G0 X0 Y0 Z{}".format(data['finalZ']))
 			else:
 				self._logger.info("cannot probe since perm is missing")
@@ -627,14 +635,17 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 		if self.checkForProbe > 0:
 			mat = self.probeRegex.match(line)
 			if mat:
-				self._logger.debug(mat.groups())
-				self.points.append((float(mat.group('x'))-self.offset[0], float(mat.group('y'))-self.offset[1], float(mat.group('z'))-self.offset[2]))
 				self.checkForProbe -= 1
+				self._logger.debug("{} ({}, {}, {})".format(self.checkForProbe, mat.group('x'), mat.group('y'), mat.group('z')))
+				self.points.append((float(mat.group('x'))+self.offset[0], float(mat.group('y'))+self.offset[1], float(mat.group('z'))+self.offset[2]))
+				self._plugin_manager.send_plugin_message("gcodeleveling", dict(state='updateProbing', currentPoint=self.probePoints-self.checkForProbe, totalPoints=self.probePoints))
 				if self.checkForProbe == 0:
 					self._logger.debug(self.points)
 					self._logger.info("Saving auto-probed points")
-					self._settings.save(['points'], self.points)
+					self._settings.set(['points'], self.points)
 					self.update_from_settings()
+					self._plugin_manager.send_plugin_message("gcodeleveling", dict(state='finishedProbing'))
+
 
 		return line
 
