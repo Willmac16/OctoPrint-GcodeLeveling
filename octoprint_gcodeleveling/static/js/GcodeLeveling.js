@@ -34,7 +34,8 @@ $(function() {
                     xOffset: parseFloat(self.settingsViewModel.settings.plugins.gcodeleveling.xOffset()).toFixed(3),
                     yOffset: parseFloat(self.settingsViewModel.settings.plugins.gcodeleveling.yOffset()).toFixed(3),
                     zOffset: parseFloat(self.settingsViewModel.settings.plugins.gcodeleveling.zOffset()).toFixed(3),
-                    finalZ: parseFloat(self.settingsViewModel.settings.plugins.gcodeleveling.finalZ()).toFixed(3)
+                    finalZ: parseFloat(self.settingsViewModel.settings.plugins.gcodeleveling.finalZ()).toFixed(3),
+                    sendBedLevelVisualizer: self.settingsViewModel.settings.plugins.gcodeleveling.sendBedLevelVisualizer()
                 }),
                 contentType: "application/json; charset=UTF-8"
             });
@@ -59,7 +60,9 @@ $(function() {
                     self.probingNotify = new PNotify({
                         title: 'Started Probing',
                         type: 'info',
-                        text: `Currently Homing: @ Point (0/${self.probePoints})`,
+                        textTrusted: true,
+                        text: `Currently Homing: @ Point (0/${self.probePoints}) <br />
+                            <div class="progress progress-striped active"><div class="bar" style="width: 0%"></div></div>`,
                         hide: false
                     });
                 } else if (data.state === "updateProbing") {
@@ -68,13 +71,16 @@ $(function() {
                         self.probingNotify = new PNotify({
                             title: 'Probing',
                             type: 'info',
-                            text: `@ Point (${data.currentPoint}/${self.probePoints})`,
+                            textTrusted: true,
+                            text: `@ Point (${data.currentPoint}/${self.probePoints}) <br />
+                                <div class="progress progress-striped active"><div class="bar" style="width: ${data.currentPoint/self.probePoints*100.0}%"></div></div>`,
                             hide: false
                         });
                     } else {
                         pointUpdate = {
                             title: 'Probing',
-                            text: `@ Point (${data.currentPoint}/${self.probePoints})`
+                            text: `@ Point (${data.currentPoint}/${self.probePoints}) <br />
+                                <div class="progress progress-striped active"><div class="bar" style="width: ${data.currentPoint/self.probePoints*100.0}%"></div></div>`
                         }
                         self.probingNotify.update(pointUpdate);
                     }
@@ -84,13 +90,16 @@ $(function() {
                         self.probingNotify = new PNotify({
                             title: 'Finished Probing',
                             type: 'info',
-                            text: `${self.probePoints} were probed and saved`,
+                            textTrusted: true,
+                            text: `${self.probePoints} were probed and saved <br />
+                                <div class="progress progress-striped active"><div class="bar" style="width: 100%"></div></div>`,
                             hide: false
                         });
                     } else {
                         finishUpdate = {
                             title: 'Finished Probing',
-                            text: `${self.probePoints} points were probed and saved`
+                            text: `${self.probePoints} points were probed and saved <br />
+                                <div class="progress progress-striped active"><div class="bar" style="width: 100%"></div></div>`
                         }
                         self.probingNotify.update(finishUpdate);
                     }
