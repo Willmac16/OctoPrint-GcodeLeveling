@@ -210,12 +210,6 @@
             </div>
         </div>
         <div class="control-group">
-            <label class="control-label">{{ _('Send Mesh to BedLevelVisualizer')}}</label>
-            <div class="controls">
-                <input type="checkbox" data-bind="checked: settingsViewModel.settings.plugins.gcodeleveling.sendBedLevelVisualizer">
-            </div>
-        </div>
-        <div class="control-group">
             <button title="Probe" class="btn btn-primary span1 pull-right" data-bind="click: probe, enable: loginState.hasPermissionKo(access.permissions.CONTROL)">
                 <i class="fa fa-border-all"></i>
             </button>

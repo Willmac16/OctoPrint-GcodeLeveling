@@ -77,6 +77,9 @@ or manually using this URL:
     - Probe Position Command is run to ask your firmware for the position when the probe triggers
         * Marlin: `M114`
         * GRBL: leave it blank since it will autoreport the probe position
+    - Home Command will be run to home your machine before probing
+        * Marlin: `G28`
+        * GRBL: `$H`
     - The x and y settings determine how many points to probe and the rectangle to probe them in
     - The different z values determine how high the plugin should move the probe:
         * When moving above and clear of the surface--clearZ
