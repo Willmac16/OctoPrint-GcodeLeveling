@@ -523,9 +523,8 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 
 		self.offset = (self._settings.get_float(['xOffset']), self._settings.get_float(['yOffset']), self._settings.get_float(['zOffset']))
 
-		# normal settigns loading
+		# normal settings loading
 		points = self._settings.get(['points'])
-		self._logger.debug(points)
 
 		allZeros = True
 		for point in points:
@@ -667,6 +666,45 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 
 		self._printer.commands("G0 X0 Y0 Z{}".format(self.finalZ))
 
+	def send_BLV(self):
+		mesh = []
+
+		forward = True
+		first = True
+		count = 0
+		for point in self.points:
+			if first:
+				if count < self.yCount:
+					mesh.append([point[2]])
+				else:
+					first = False
+					forward = False
+
+					mesh[self.yCount-1].append(point[2])
+			else:
+
+				if forward:
+					index = count % self.yCount
+				else:
+					index = (self.yCount - 1) - (count % self.yCount)
+
+				mesh[index].append(point[2])
+			count += 1
+			if count % self.yCount == 0:
+				forward = not forward
+
+		bed = dict(
+			type="rectangular",
+			x_min=self.xMin+self.offset[0],
+			x_max=self.xMax+self.offset[0],
+			y_min=self.yMin+self.offset[1],
+			y_max=self.yMax+self.offset[1],
+			z_min=min(self.clearZ, self.probeZ)+self.offset[2],
+			z_max=max(self.clearZ, self.probeZ)+self.offset[2]
+		)
+		self._plugin_manager.send_plugin_message("bedlevelvisualizer", dict(mesh=mesh, bed=bed))
+		self._logger.info("mesh sent to BLV")
+
 	##~~ Received Gcode Hook
 	def parseReceived(self, comm_instance, line):
 		if self.checkForProbe > 0:
@@ -683,40 +721,9 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 					self.update_from_settings()
 					self._plugin_manager.send_plugin_message("gcodeleveling", dict(state='finishedProbing'))
 					if self.sendBedLevelVisualizer:
-						mesh = []
-
-						forward = True
-						first = True
-						count = 0
-						for point in self.points:
-							if first:
-								if count < self.yCount:
-									mesh.append([point[2]])
-								else:
-									first = False
-									forward = False
-
-									mesh[self.yCount-1].append(point[2])
-							else:
-
-								if forward:
-									index = count % self.yCount
-								else:
-									index = (self.yCount - 1) - (count % self.yCount)
-
-								mesh[index].append(point[2])
-							count += 1
-
-						bed = dict(
-							type="rectangular",
-			                x_min=self.xMin+self.offset[0],
-			                x_max=self.xMax+self.offset[0],
-			                y_min=self.yMin+self.offset[1],
-			                y_max=self.yMax+self.offset[1],
-			                z_min=min(self.clearZ, self.probeZ)+self.offset[2],
-			                z_max=max(self.clearZ, self.probeZ)+self.offset[2]
-						)
-						self._plugin_manager.send_plugin_message("bedlevelvisualizer", dict(mesh=mesh, bed=bed))
+						thread = threading.Thread(target=self.send_BLV)
+						thread.daemon = True
+						thread.start()
 		return line
 
 
