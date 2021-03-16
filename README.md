@@ -67,16 +67,24 @@ or manually using this URL:
 + The calibration points are used to create a model of the surface.
     - Enter the x and y coordinate, then the measured z coordinate.
 
-### Auto Probing
+### Auto Probing (0.4.0)
 + Probing automatically probes a grid for the surface points.
     - Probe Regex is used to properly convert whatever your firmware converts into points this plugin can use.
         * For example: if your marlin firmware returns `ok X:200.0 Y:40.0 Z:10.0 E:0.0 Count: A:20000 B:4000 C:1000`
-        * `^ok X:(?P<x>[0-9]+\.[0-9]+) Y:(?P<y>[0-9]+\.[0-9]+) Z:(?P<z>[0-9]+\.[0-9]+)` would return the 3 position values to the plugin
+        * Marlin: `^ok X:(?P<x>[0-9]+\.[0-9]+) Y:(?P<y>[0-9]+\.[0-9]+) Z:(?P<z>[0-9]+\.[0-9]+)` would return the 3 position values to the plugin
         * GRBL: `\[PRB:(?P<x>[0-9]+\.[0-9]{3}),(?P<y>[0-9]+\.[0-9]{3}),(?P<z>[0-9]+\.[0-9]+):1\]`
         * If you are crafting your own regex, make sure that each pos value gets its own regex group labeling each pos with the correct id `?P<x>` for x.
     - Probe Position Command is run to ask your firmware for the position when the probe triggers
-        * `M114` should work for marlin
-        * This can be left blank for GRBL since it will autoreport the probe position
+        * Marlin: `M114`
+        * GRBL: leave it blank since it will autoreport the probe position
+    - The x and y settings determine how many points to probe and the rectangle to probe them in
+    - The different z values determine how high the plugin should move the probe:
+        * When moving above and clear of the surface--clearZ
+        * What height the probe should trigger by (for the firmware `G38.2` value)--probeZ
+        * When probing is done and the tool moves back to the origin-finalZ
+    - Offset helps with probes that are not inline with toolheads. Give the offset in mm to go from the toolhead position to the probe.
+    - Send Mesh to BedLevelVisualizer will send the probed points from this plugin when enabled.
+        * If you want the BLV `Update Mesh Now` button to work, then set your BedLevelVisualizer `Gcode Command for Mesh Update Process` to `@GCODELEVELING-AUTOPROBE`
 
 ## Performance
 
