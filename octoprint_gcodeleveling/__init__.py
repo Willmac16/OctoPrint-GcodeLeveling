@@ -468,6 +468,9 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 			"points": [
 				[0,0,0]
 			],
+			"coeffs": [
+				[[0]]
+			],
 			"modelDegree": {"x":2,"y":2},
 			"zMin": 0.0,
 			"zMax": 100.0,
@@ -524,6 +527,8 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 		self.offset = (self._settings.get_float(['xOffset']), self._settings.get_float(['yOffset']), self._settings.get_float(['zOffset']))
 
 		# normal settings loading
+
+		# TODO: Hash the points and check before updating the coeffs
 		points = self._settings.get(['points'])
 
 		allZeros = True
@@ -547,6 +552,7 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 			self._logger.info("Leveling Model Computed")
 			self._logger.debug(self.coeffs)
 		else:
+			# Add Pnotify
 			self._logger.info("Points have not been entered (or they are all zero). Enter points or disable this plugin if you do not need it.")
 
 
@@ -588,6 +594,7 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 			)
 		)
 
+	## AutoProbing Code
 	##~~ SimpleAPIPlugin mixin
 	def get_api_commands(self):
 		return dict(

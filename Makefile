@@ -3,21 +3,16 @@ run: install
 	@echo "Run Called"
 
 test: install
-	rm -f testfiles/*.translate*
-	python3 test.py
+	rm -f testfiles/*-GCL*
+	python3.8 test.py
 	@echo "Test Called"
 
 install: .install
 
-.install: setup.py
+.install: octoprint_gcodeleveling/src/parse.cpp octoprint_gcodeleveling/src/vector.cpp setup.py
 	octoprint dev plugin:install
 	@touch .install
 	@echo "Install called"
-
-# .install: octoprint_translatemodel/src/translate.cpp setup.py
-# 	octoprint dev plugin:install
-# 	@touch .install
-# 	@echo "Install called"
 
 clean:
 	rm .install
