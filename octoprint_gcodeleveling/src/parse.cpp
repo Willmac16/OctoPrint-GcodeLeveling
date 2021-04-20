@@ -11,6 +11,7 @@
 #include <cmath>
 
 #include "vector.cpp"
+#include "fit.cpp"
 
 // Logging Vars
 static char module_name[] = "octoprint.plugins.gcodeleveling-C++";
@@ -464,7 +465,7 @@ leveling_level(PyObject *self, PyObject *args)
     Py_DECREF(logging_message);
 
     // ADD THE 2 PARENTHESIS AFTER FINAL VAR (THIS HAS HAPPENED TWICE NOW)
-    if (!PyArg_ParseTuple(args, "Ossffp", &coeffList, &path, &ver, &minZ, &maxZ, &invertZ))
+    if (!PyArg_ParseTuple(args, "Oss(ffp)", &coeffList, &path, &ver, &minZ, &maxZ, &invertZ))
         return NULL;
     Py_INCREF(coeffList);
 
@@ -516,8 +517,87 @@ leveling_level(PyObject *self, PyObject *args)
 
     opath = levelFile(coeffs, numRows, numCols, (std::string) path, (std::string) ver, minZ, maxZ, invertZ);
     debug("Done leveling");
+
+    for (int i = 0; i < numRows; i++)
+    {
+        delete[] coeffs[i];
+    }
+    delete[] coeffs;
+
     Py_BLOCK_THREADS
     return Py_BuildValue("s", opath.c_str());
+}
+
+static PyObject *
+leveling_fit(PyObject *self, PyObject *args)
+{
+    PyObject *pointList;
+
+    int xDeg, yDeg;
+
+    PyObject *logging_message = Py_BuildValue("s", "Before tuple parse");
+    Py_XINCREF(logging_message);
+    PyObject_CallMethod(logging_object, "debug", "O", logging_message, NULL);
+    Py_DECREF(logging_message);
+
+    // ADD THE 2 PARENTHESIS AFTER FINAL VAR (THIS HAS HAPPENED TWICE NOW)
+    if (!PyArg_ParseTuple(args, "O(ii)", &pointList, &xDeg, &yDeg))
+        return NULL;
+    Py_INCREF(pointList);
+
+    logging_message = Py_BuildValue("s", "After tuple parse");
+    Py_XINCREF(logging_message);
+    PyObject_CallMethod(logging_object, "debug", "O", logging_message, NULL);
+    Py_DECREF(logging_message);
+
+    // parse through all the shifts
+    pointList = PySequence_Fast(pointList, "argument must be iterable");
+    if(!pointList)
+        return 0;
+
+    const int numPoints = PySequence_Fast_GET_SIZE(pointList);
+    double points[numPoints][3];
+
+    for (int i = 0; i < numPoints; i++)
+    {
+        PyObject *pointSet = PySequence_Fast_GET_ITEM(pointList, i);
+        pointSet = PySequence_Fast(pointSet, "argument must be iterable");
+
+        // Get the x then y coord and convert to pyfloat then c double
+        for (int j = 0; j < 3; j++)
+        {
+            points[i][j] = PyFloat_AS_DOUBLE(PyNumber_Float(PySequence_Fast_GET_ITEM(pointSet, j)));
+        }
+    }
+
+    Py_DECREF(pointList);
+
+    Py_UNBLOCK_THREADS
+
+    debug("Started fitting");
+    double **coeffs = fit(points, numPoints, xDeg, yDeg);
+    debug("Done fitting");
+
+    // create pylist 2d object
+    PyObject *coeffList = PyList_New(xDeg+1);
+    PyObject *coeffSet;
+    for (int i=0; i<=xDeg; i++)
+    {
+        coeffSet = PyList_New(yDeg+1);
+        for (int j=0; j<=yDeg; j++) {
+            PyList_SET_ITEM(coeffSet, j, PyFloat_FromDouble(coeffs[i][j]));
+        }
+        PyList_SET_ITEM(coeffList, i, coeffSet);
+    }
+
+    // delete c double array
+    for (int i=0; i<=xDeg; i++) {
+        delete[] coeffs[i];
+    }
+    delete[] coeffs;
+
+    Py_BLOCK_THREADS
+    return Py_BuildValue("O", coeffList);
 }
 
 static PyObject *
@@ -545,6 +625,8 @@ leveling_test(PyObject *self, PyObject *args)
 static PyMethodDef LevelingMethods[] = {
     {"level",  leveling_level, METH_VARARGS,
      "Level a gcode file"},
+    {"fit",  leveling_fit, METH_VARARGS,
+    "fit the poly-model to points"},
     {"test",  leveling_test, METH_VARARGS,
     "Just a test method"},
     {NULL, NULL, 0, NULL}        /* Sentinel */
