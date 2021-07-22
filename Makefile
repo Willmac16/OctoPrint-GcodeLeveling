@@ -2,8 +2,10 @@ run: install
 	octoprint serve
 	@echo "Run Called"
 
-test: install
+testfile-clean:
 	rm -f testfiles/*-GCL*
+
+test: install testfile-clean
 	python3.8 test.py
 	@echo "Test Called"
 

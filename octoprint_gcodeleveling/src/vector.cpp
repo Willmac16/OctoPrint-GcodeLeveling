@@ -39,7 +39,9 @@ class Vector
         void sub(const Vector v);
         void mult(double s);
 
-        // void rotate(double radians);
+        void reset() {x=0;y=0;z=0;};
+
+        void rotate(double radians);
         void recip();
         bool bothNums();
 
@@ -145,6 +147,11 @@ double distBetweenPoints(Vector *a, Vector *b)
     return (*a-*b).magnitude();
 };
 
+double dot(Vector a, Vector b)
+{
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+};
+
 double dot(Vector *a, Vector *b)
 {
     return a->x * b->x + a->y * b->y + a->z * b->z;
@@ -172,16 +179,17 @@ Vector cross(Vector *a, Vector *b)
     return Vector(a->y*b->z-a->z*b->y, -a->x*b->z+b->z*b->x, a->x*b->y-a->y*b->x);
 };
 
+// Rotate anti-clockwise about Z axis (ignores Z component)
+void Vector::rotate(double radians)
+{
+    double x = this->x*cos(radians) - this->y*sin(radians);
+    double y = this->x*sin(radians) + this->y*cos(radians);
 
-// void Vector::rotate(double radians)
-// {
-//     double x = this->x*cos(radians) - this->y*sin(radians);
-//     double y = this->x*sin(radians) + this->y*cos(radians);
-//
-//     this->x = x;
-//     this->y = y;
-// }
+    this->x = x;
+    this->y = y;
+}
 
+// Reciprocate a flat vector (ignores Z component)
 void Vector::recip()
 {
     double x = -this->y;
