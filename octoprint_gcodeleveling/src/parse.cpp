@@ -205,84 +205,90 @@ void parseArgs(std::istream *iss, GcodeState *next)
     char arg;
     while ((*iss >> arg) && arg != ';')
     {
-        if (arg == '(')
+        // std::cout << "-: " << arg << std::endl;
+        if (arg != ' ')
         {
-            next->extraArgs += arg;
-            do
-            {
-                *iss >> arg;
-                next->extraArgs += arg;
-            }
-            while (arg != ')');
-        }
-        char upp = toupper(arg);
-        float f;
-        switch (upp)
-        {
-            case 'X':
-            f = parseFloat(iss);
-            if (isnormal(f)) {
-                next->pos.x = f;
-                next->absLock = next->absLock | 1;
-            }
-            break;
-            case 'Y':
-            f = parseFloat(iss);
-            if (isnormal(f)) {
-                next->pos.y = f;
-                next->absLock = next->absLock | 2;
-            }
-            break;
-            case 'Z':
-            f = parseFloat(iss);
-            if (isnormal(f)) {
-                next->pos.z = f;
-                next->absLock = next->absLock | 4;
-                // std::cout << "Z " << next->pos.z << std::endl;
-            } else {
-                std::cout << f << std::endl;
-            }
-            break;
-            case 'I':
-            f = parseFloat(iss);
-            if (isnormal(f)) {
-                next->arcMode = 1;
-                next->i = f;
-            }
-            break;
-            case 'J':
-            f = parseFloat(iss);
-            if (isnormal(f)) {
-                next->arcMode = 1;
-                next->j = f;
-            }
-            break;
-            case 'R':
-            f = parseFloat(iss);
-            if (isnormal(f)) {
-                next->arcMode = 0;
-                next->r = f;
-            }
-            break;
-            case 'E':
-            f = parseFloat(iss);
-            if (isnormal(f)) {
-                if (next->extruderMode == -1)
-                    next->extruderMode = 1;
-                next->e = f;
-            }
-            break;
-            default:
-            if (upp > 'A' && upp <= 'Z')
-            {
-                next->extraArgs += " ";
-                next->extraArgs += arg;
-            }
-            else
+            if (arg == '(')
             {
                 next->extraArgs += arg;
+                do
+                {
+                    *iss >> arg;
+                    next->extraArgs += arg;
+                }
+                while (arg != ')');
             }
-            break;
+            char upp = toupper(arg);
+            float f;
+            switch (upp)
+            {
+                case 'X':
+                    f = parseFloat(iss);
+                    if (isfinite(f)) {
+                        next->pos.x = f;
+                        next->absLock = next->absLock | 1;
+                        // std::cout << "X " << next->pos.x << std::endl;
+                    }
+                    break;
+                case 'Y':
+                    f = parseFloat(iss);
+                    if (isfinite(f)) {
+                        next->pos.y = f;
+                        next->absLock = next->absLock | 2;
+                        // std::cout << "Y " << next->pos.y << std::endl;
+                    }
+                    break;
+                case 'Z':
+                    f = parseFloat(iss);
+                    if (isfinite(f)) {
+                        next->pos.z = f;
+                        next->absLock = next->absLock | 4;
+                        // std::cout << "Z " << next->pos.z << std::endl;
+                    } else {
+                        std::cout << f << std::endl;
+                    }
+                    break;
+                case 'I':
+                    f = parseFloat(iss);
+                    if (isfinite(f)) {
+                        next->arcMode = 1;
+                        next->i = f;
+                    }
+                    break;
+                case 'J':
+                    f = parseFloat(iss);
+                    if (isfinite(f)) {
+                        next->arcMode = 1;
+                        next->j = f;
+                    }
+                    break;
+                case 'R':
+                    f = parseFloat(iss);
+                    if (isfinite(f)) {
+                        next->arcMode = 0;
+                        next->r = f;
+                    }
+                    break;
+                case 'E':
+                    f = parseFloat(iss);
+                    if (isfinite(f)) {
+                        if (next->extruderMode == -1)
+                            next->extruderMode = 1;
+                        next->e = f;
+                    }
+                    break;
+                default:
+                        if (upp > 'A' && upp <= 'Z')
+                        {
+                            next->extraArgs += " ";
+                            next->extraArgs += arg;
+                        }
+                        else
+                        {
+                            next->extraArgs += arg;
+                        }
+                    break;
+            }
         }
     }
 
@@ -447,7 +453,7 @@ float arc(GcodeState *current, GcodeState *next)
 
         next->arcAngle = beta;
 
-        return beta * radius.magnitude();
+        return fabs(beta * radius.magnitude());
     }
     else
     {
@@ -478,7 +484,7 @@ float arc(GcodeState *current, GcodeState *next)
             Vector radius = current->absPos - next->arcCenter, arm = next->absPos - next->arcCenter;
 
             next->arcAngle = acos(dot(&radius, &arm)/radius.magnitude()/arm.magnitude()) * rotModify;
-            return next->arcAngle * radius.magnitude();
+            return fabs(next->arcAngle * radius.magnitude());
         }
     }
 }
@@ -486,10 +492,10 @@ float arc(GcodeState *current, GcodeState *next)
 // Consider making some of these settings for performance purposes
 // or tune to execution time
 const float MIN_DER = 0.0001;
-const float MIN_DEV = 0.25;
+const float MIN_DEV = 0.0001;
 const float TELO = 0.01;
-const int STEP_BAIL = 1000;
-const float STEP_SCALER = 0.1;
+const int STEP_BAIL = 25;
+const float STEP_SCALER = 1.0;
 const int NUM_PROBES = 10;
 
 Vector gradient(ParseObject *parseOpts, float x, float y)
@@ -553,6 +559,8 @@ GcodeState * worstLineOffender(GcodeState *current, GcodeState *next, ParseObjec
         }
     }
 
+    std::cout << "P: " << maxP << ", " <<  maxDev << std::endl;
+
     int steps = 0;
     float der, progress = maxP;
     do
@@ -561,8 +569,10 @@ GcodeState * worstLineOffender(GcodeState *current, GcodeState *next, ParseObjec
 
         progress += der * STEP_SCALER;
         steps++;
+        std::cout << "H: " << progress << " - " << der << " : " << lineSqrDistance(progress, current, next, parseOpts) << " ~ " << -der * der * STEP_SCALER + lineSqrDistance(progress, current, next, parseOpts) << std::endl;
+
     }
-    while (der == MIN_DER && steps < STEP_BAIL && progress > TELO && progress < 1.0 - TELO);
+    while (der >= MIN_DER && steps < STEP_BAIL && progress > TELO && progress < 1.0 - TELO);
 
     // Check worst point is far enough from ends AND deviates enough to warrant correction
     if (progress > TELO && progress < 1.0 - TELO && lineSqrDistance(progress, current, next, parseOpts) > MIN_DEV)
@@ -598,7 +608,7 @@ float arcSqrDistance(float progress, GcodeState *current, GcodeState *next, Pars
 {
     Vector radius = current->absPos - next->arcCenter;
     // TODO: Check that rotate is going the right direction
-    radius.rotate(next->arcAngle);
+    radius.rotate(next->arcAngle*progress);
     Vector pos = next->arcCenter + radius;
 
     return pow(polyEval(pos.x, pos.y, parseOpts) - current->modelHeight - (next->modelHeight-current->modelHeight)*progress, 2.0);
@@ -610,7 +620,7 @@ float arcSqrDerivative(float progress, GcodeState *current, GcodeState *next, Pa
 
     Vector radius = current->absPos - next->arcCenter;
     // TODO: Check that rotate is going the right direction
-    radius.rotate(next->arcAngle);
+    radius.rotate(next->arcAngle*progress);
     Vector pos = next->arcCenter + radius;
 
     if (next->moveMode == 3)
@@ -637,6 +647,8 @@ GcodeState * worstArcOffender(GcodeState *current, GcodeState *next, ParseObject
         }
     }
 
+    std::cout << "P: " << maxP << ", " <<  maxDev << std::endl;
+
     int steps = 0;
     float der, progress = maxP;
     do
@@ -645,15 +657,18 @@ GcodeState * worstArcOffender(GcodeState *current, GcodeState *next, ParseObject
 
         progress += der * STEP_SCALER;
         steps++;
+
+        std::cout << "H: " << progress << " - " << der << " : " << arcSqrDistance(progress, current, next, parseOpts) << " ~ " << -der * der * STEP_SCALER + arcSqrDistance(progress, current, next, parseOpts) << std::endl;
     }
-    while (der == MIN_DER && steps < STEP_BAIL && progress > TELO && progress < 1.0 - TELO);
+    while (der >= MIN_DER && steps < STEP_BAIL && progress > TELO && progress < 1.0 - TELO);
+
+
 
     // Check worst point is far enough from ends AND deviates enough to warrant correction
     if (progress > TELO && progress < 1.0 - TELO && arcSqrDistance(progress, current, next, parseOpts) > MIN_DEV)
     {
         GcodeState *worst = new GcodeState;
         *worst = *next;
-
 
         if (next->extruderMode == 0) {
             worst->e = next->e * progress;
@@ -694,11 +709,11 @@ GcodeState * worstArcOffender(GcodeState *current, GcodeState *next, ParseObject
 void constructLine(GcodeState *current, GcodeState *next, ParseObject *parseOpts)
 {
     *(parseOpts->out) << "G" << next->moveMode;
-    if (next->pos.x != current->pos.x)
-    *(parseOpts->out) << " X" << next->pos.x;
+    if (next->pos.x != current->pos.x || (current->absLock | 6) != 7)
+        *(parseOpts->out) << " X" << next->pos.x;
 
-    if (next->pos.y != current->pos.y)
-    *(parseOpts->out) << " Y" << next->pos.y;
+    if (next->pos.y != current->pos.y || (current->absLock | 5) != 7)
+     *(parseOpts->out) << " Y" << next->pos.y;
 
     // only send an adjusted z value if we know where absolutely we are
     if (next->absLock == 7) {
@@ -749,7 +764,6 @@ void interpolateState(GcodeState *current, GcodeState *next, ParseObject *parseO
 {
     if (next->interpNeeded)
     {
-        // just write the out value without any movement slicing
         if (next->moveMode < 2)
         {
             if (current->absLock == 7 && next->absLock == 7 && parseOpts->maxLine > 0.0 && dist(current, next) > parseOpts->maxLine)
@@ -814,7 +828,7 @@ std::string levelFile(std::string inPath, std::string version, struct ParseObjec
     // TODO: setup write back to original file
     std::ofstream out(opath);
 
-    info("Working on file " + opath);
+    info("Leveling into file " + opath);
 
     std::string line;
 
@@ -847,6 +861,8 @@ std::string levelFile(std::string inPath, std::string version, struct ParseObjec
 
         next->computeModelHeight(parseOpts);
 
+        debug(line);
+
         interpolateState(current, next, parseOpts);
 
         *current = *next;
@@ -874,7 +890,7 @@ leveling_level(PyObject *self, PyObject *args)
     Py_DECREF(logging_message);
 
     // ADD THE 2 PARENTHESIS AFTER FINAL VAR (THIS HAS HAPPENED TWICE NOW)
-    if (!PyArg_ParseTuple(args, "Oss(ffpff)", &coeffList, &path, &ver, &configOpts.minZ, &configOpts.maxZ, &configOpts.invertZ, &configOpts.maxLine, &configOpts.maxArc))
+    if (!PyArg_ParseTuple(args, "Oss(ffpff)", &coeffList, &path, &ver, &(configOpts.minZ), &(configOpts.maxZ), &(configOpts.invertZ), &(configOpts.maxLine), &(configOpts.maxArc)))
         return NULL;
     Py_INCREF(coeffList);
 
@@ -988,14 +1004,16 @@ leveling_fit(PyObject *self, PyObject *args)
     Py_DECREF(pointList);
 
     Py_UNBLOCK_THREADS
-
     debug("Started fitting");
     double **coeffs = fit(points, numPoints, xDeg, yDeg);
     debug("Done fitting");
+    Py_BLOCK_THREADS
+
+
 
     // create pylist 2d object
-    PyObject *coeffList = PyList_New(xDeg+1);
     PyObject *coeffSet;
+    PyObject *coeffList = PyList_New(xDeg+1);
     for (int i=0; i<=xDeg; i++)
     {
         coeffSet = PyList_New(yDeg+1);
@@ -1003,6 +1021,7 @@ leveling_fit(PyObject *self, PyObject *args)
             PyList_SET_ITEM(coeffSet, j, PyFloat_FromDouble(coeffs[i][j]));
         }
         PyList_SET_ITEM(coeffList, i, coeffSet);
+        // Py_INCREF(coeffSet);
     }
 
     // delete c double array
@@ -1011,7 +1030,6 @@ leveling_fit(PyObject *self, PyObject *args)
     }
     delete[] coeffs;
 
-    Py_BLOCK_THREADS
     return Py_BuildValue("O", coeffList);
 }
 
