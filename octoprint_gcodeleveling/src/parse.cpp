@@ -244,8 +244,6 @@ void parseArgs(std::istream *iss, GcodeState *next)
                         next->pos.z = f;
                         next->absLock = next->absLock | 4;
                         // std::cout << "Z " << next->pos.z << std::endl;
-                    } else {
-                        std::cout << f << std::endl;
                     }
                     break;
                 case 'I':
@@ -491,10 +489,10 @@ float arc(GcodeState *current, GcodeState *next)
 
 // Consider making some of these settings for performance purposes
 // or tune to execution time
-const float MIN_DER = 0.0001;
+const float MIN_DER = 1.0e-07;
 const float MIN_DEV = 0.0001;
 const float TELO = 0.01;
-const int STEP_BAIL = 25;
+const int STEP_BAIL = 50;
 const float STEP_SCALER = 1.0;
 const int NUM_PROBES = 10;
 
@@ -509,11 +507,11 @@ Vector gradient(ParseObject *parseOpts, float x, float y)
         {
             // x comp pass
             if (i > 0)
-                grad.x += coeffs[i][j] * i * pow(x, i-1);
+                grad.x += coeffs[i][j] * i * pow(x, i-1) * pow(y, j);
 
             // y comp pass
             if (j > 0)
-                grad.y += coeffs[i][j] * j * pow(y, j-1);
+                grad.y += coeffs[i][j] * j * pow(y, j-1) * pow(x, i);
         }
     }
 
@@ -523,13 +521,15 @@ Vector gradient(ParseObject *parseOpts, float x, float y)
 
 float lineSqrDistance(float progress, GcodeState *current, GcodeState *next, ParseObject *parseOpts)
 {
+    float deltaHeight = next->modelHeight-current->modelHeight;
+
     Vector heading = next->absPos - current->absPos;
     heading.z = 0.0;
     Vector pos = current->absPos;
     pos.z = 0.0;
     pos.add(heading*progress);
 
-    return pow(polyEval(pos.x, pos.y, parseOpts) - current->modelHeight - (next->modelHeight-current->modelHeight)*progress, 2.0);
+    return pow(polyEval(pos.x, pos.y, parseOpts) - current->modelHeight - deltaHeight*progress, 2.0);
 }
 
 float lineSqrDerivative(float progress, GcodeState *current, GcodeState *next, ParseObject *parseOpts)
@@ -542,12 +542,12 @@ float lineSqrDerivative(float progress, GcodeState *current, GcodeState *next, P
     pos.z = 0.0;
     pos.add(heading*progress);
 
-    return 2.0 * (polyEval(pos.x, pos.y, parseOpts) - current->modelHeight - (deltaHeight)*progress) * (dot(gradient(parseOpts, pos.x, pos.y), heading) - deltaHeight);
+    return 2.0 * (polyEval(pos.x, pos.y, parseOpts) - current->modelHeight - deltaHeight*progress) * (dot(gradient(parseOpts, pos.x, pos.y), heading) - deltaHeight);
 }
 
 GcodeState * worstLineOffender(GcodeState *current, GcodeState *next, ParseObject *parseOpts)
 {
-    float maxDev = 0.0, dev, p, maxP;
+    float maxDev = 0.0, dev, p, maxP, initDer;
     for (int probePoint = 0; probePoint < NUM_PROBES; probePoint++)
     {
         p = probePoint / 10.0;
@@ -559,7 +559,11 @@ GcodeState * worstLineOffender(GcodeState *current, GcodeState *next, ParseObjec
         }
     }
 
-    std::cout << "P: " << maxP << ", " <<  maxDev << std::endl;
+    bool validStart = dev >= MIN_DEV;
+
+    initDer = lineSqrDerivative(maxP, current, next, parseOpts);
+
+    // std::cout << "P: " << maxP << ", " <<  maxDev << std::endl;
 
     int steps = 0;
     float der, progress = maxP;
@@ -569,10 +573,11 @@ GcodeState * worstLineOffender(GcodeState *current, GcodeState *next, ParseObjec
 
         progress += der * STEP_SCALER;
         steps++;
-        std::cout << "H: " << progress << " - " << der << " : " << lineSqrDistance(progress, current, next, parseOpts) << " ~ " << -der * der * STEP_SCALER + lineSqrDistance(progress, current, next, parseOpts) << std::endl;
+        // std::cout << "H: " << progress << " : " << lineSqrDistance(progress, current, next, parseOpts) << std::endl;
+        // std::cout << "H: " << progress << " - " << der << " : " << lineSqrDistance(progress, current, next, parseOpts) << std::endl;
 
     }
-    while (der >= MIN_DER && steps < STEP_BAIL && progress > TELO && progress < 1.0 - TELO);
+    while (fabs(der) >= 0.25 * initDer && fabs(der) >= MIN_DER && steps < STEP_BAIL && progress > TELO && progress < 1.0 - TELO);
 
     // Check worst point is far enough from ends AND deviates enough to warrant correction
     if (progress > TELO && progress < 1.0 - TELO && lineSqrDistance(progress, current, next, parseOpts) > MIN_DEV)
@@ -601,7 +606,11 @@ GcodeState * worstLineOffender(GcodeState *current, GcodeState *next, ParseObjec
         return worst;
     }
     else
+    {
+        if (validStart)
+            debug("Valid start but invalid heated");
         return NULL;
+    }
 }
 
 float arcSqrDistance(float progress, GcodeState *current, GcodeState *next, ParseObject *parseOpts)
@@ -619,6 +628,7 @@ float arcSqrDerivative(float progress, GcodeState *current, GcodeState *next, Pa
     float deltaHeight = next->modelHeight-current->modelHeight;
 
     Vector radius = current->absPos - next->arcCenter;
+    float r = radius.magnitude();
     // TODO: Check that rotate is going the right direction
     radius.rotate(next->arcAngle*progress);
     Vector pos = next->arcCenter + radius;
@@ -628,14 +638,15 @@ float arcSqrDerivative(float progress, GcodeState *current, GcodeState *next, Pa
     else
         radius.rotate(-M_PI_4);
 
-    Vector heading = radius;
+    Vector heading = radius.normalized();
+    heading.mult(fabs(next->arcAngle) * r);
 
     return 2.0 * (polyEval(pos.x, pos.y, parseOpts) - current->modelHeight - (deltaHeight)*progress) * (dot(gradient(parseOpts, pos.x, pos.y), heading) - deltaHeight);
 }
 
 GcodeState * worstArcOffender(GcodeState *current, GcodeState *next, ParseObject *parseOpts)
 {
-    float maxDev = 0.0, dev, p, maxP;
+    float maxDev = 0.0, dev, initDer, p, maxP;
     for (int probePoint = 0; probePoint < NUM_PROBES; probePoint++)
     {
         p = probePoint / 10.0;
@@ -646,8 +657,10 @@ GcodeState * worstArcOffender(GcodeState *current, GcodeState *next, ParseObject
             maxP = p;
         }
     }
+    
+    initDer = arcSqrDerivative(maxP, current, next, parseOpts);
 
-    std::cout << "P: " << maxP << ", " <<  maxDev << std::endl;
+    // std::cout << "P: " << maxP << ", " <<  maxDev << std::endl;
 
     int steps = 0;
     float der, progress = maxP;
@@ -658,11 +671,10 @@ GcodeState * worstArcOffender(GcodeState *current, GcodeState *next, ParseObject
         progress += der * STEP_SCALER;
         steps++;
 
-        std::cout << "H: " << progress << " - " << der << " : " << arcSqrDistance(progress, current, next, parseOpts) << " ~ " << -der * der * STEP_SCALER + arcSqrDistance(progress, current, next, parseOpts) << std::endl;
+        // std::cout << "H: " << progress << " - " << der << " : " << arcSqrDistance(progress, current, next, parseOpts) << " ~ " << -der * der * STEP_SCALER + arcSqrDistance(progress, current, next, parseOpts) << std::endl;
     }
-    while (der >= MIN_DER && steps < STEP_BAIL && progress > TELO && progress < 1.0 - TELO);
-
-
+    while (fabs(der) >= 0.25 * initDer && fabs(der) >= MIN_DER && steps < STEP_BAIL && progress > TELO && progress < 1.0 - TELO);
+    
 
     // Check worst point is far enough from ends AND deviates enough to warrant correction
     if (progress > TELO && progress < 1.0 - TELO && arcSqrDistance(progress, current, next, parseOpts) > MIN_DEV)
@@ -925,15 +937,15 @@ leveling_level(PyObject *self, PyObject *args)
         }
     }
 
-    // print out the double array
-    for (int i = 0; i < numRows; i++)
-    {
-        for (int j = 0; j < numCols-1; j++)
-        {
-            std::cout << configOpts.coeffs[i][j] << ", ";
-        }
-        std::cout << configOpts.coeffs[i][numCols-1] << std::endl;
-    }
+    // // print out the double array
+    // for (int i = 0; i < numRows; i++)
+    // {
+    //     for (int j = 0; j < numCols-1; j++)
+    //     {
+    //         std::cout << configOpts.coeffs[i][j] << ", ";
+    //     }
+    //     std::cout << configOpts.coeffs[i][numCols-1] << std::endl;
+    // }
 
     std::string opath;
 

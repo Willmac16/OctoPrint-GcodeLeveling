@@ -26,7 +26,7 @@ class GcodeLevelingPlugin(octoprint.plugin.StartupPlugin,
 			if not octoprint.filemanager.valid_file_type(fileName, type="gcode"):
 				return file_object
 
-			if fileName.contains("-GCL"):
+			if "-GCL" in fileName:
 				self._logger.debug("skipping a GCL file")
 				return file_object
 			else:
