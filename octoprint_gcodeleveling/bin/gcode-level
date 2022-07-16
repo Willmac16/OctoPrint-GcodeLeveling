@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+
+from sympy import N
+import leveling, logging, os, yaml, sys
+
+def print_help():
+    print("Usage: gcode-level <file_to_level.gcode> [-c|--config-file <path_to_config.yaml>]")
+    print("\t gcode-level [-g|--generate-config-file]")
+    print("\t gcode-level [-h|--help]")
+
+def generate_config():
+    default_config = {
+    "points": [[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [10.0, 10.0, 0.0]],
+    "deg": [1, 1],
+    "zMin": 0.0,
+    "zMax": 200.0,
+    "maxLine": 10.0,
+    "maxArc": 15.0
+    }
+
+    with open('leveling-config.yaml', 'w') as file:
+        yaml.dump(default_config, file)
+
+    print("Config written to leveling-config.yaml")
+
+
+def arg_scan(args):
+    config_file = 'leveling-config.yaml'
+    input_file = 'toolpath.gcode'
+
+    if len(args) == 1:
+        print_help()
+        sys.exit(1)
+
+    ind = 1
+    while (ind < len(args)):
+        if args[ind] == '--config-file' or args[ind] == '-c':
+            ind += 1
+            if (ind < len(args)):
+                config_file = args[ind]
+        elif args[ind] == '--generate-config' or args[ind] == '-g':
+            generate_config()
+            sys.exit(0)
+        elif args[ind] == '--help' or args[ind] == '-h':
+            print_help()
+            sys.exit(0)
+        else:
+            input_file = args[ind]
+
+        ind += 1
+
+    return config_file, input_file
+
+
+
+
+
+
+def main():
+    if (os.environ.get("DEBUG") != None):
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
+
+    config_file, input_file = arg_scan(sys.argv)
+
+    yml = ""
+    with open(config_file) as file:
+        yml = yaml.load(file, Loader=yaml.FullLoader)
+
+    points = yml['points']
+    deg = yml['deg']
+    zMin = yml['zMin']
+    zMax = yml['zMax']
+    maxLine = yml['maxLine']
+    maxArc = yml['maxArc']
+
+
+    coeffs = leveling.fit(points, deg)
+
+    logging.info("Leveling finished on: " + leveling.level(coeffs, input_file, "standalone-1.0.0", (zMin, zMax, False, maxLine, maxArc)))
+
+if __name__ == "__main__":
+    main()

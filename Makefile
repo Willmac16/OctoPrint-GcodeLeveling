@@ -1,26 +1,24 @@
-run: install
-	octoprint serve
-	@echo "Run Called"
-
-testfile-clean:
-	rm -f testfiles/*-GCL*
+install: .install
 
 test: install testfile-clean
 	python3 test.py
 	@echo "Test Called"
 
+testfile-clean:
+	rm -f testfiles/*-GCL*
+
 clean-test: clean test
-
-install: .install
-
 .install: octoprint_gcodeleveling/src/parse.cpp octoprint_gcodeleveling/src/fit.cpp octoprint_gcodeleveling/src/vector.cpp setup.py
-	octoprint dev plugin:install
+	python3 setup.py build
+	python3 setup.py install
 	@touch .install
 	@echo "Install called"
 
 clean:
 	rm -f .install
 	rm -f *.so
+	rm -f octoprint_gcodeleveling/*.pyc
+	rm -rf octoprint_gcodeleveling/__pycache__
 	rm -rf build
 
 send:
