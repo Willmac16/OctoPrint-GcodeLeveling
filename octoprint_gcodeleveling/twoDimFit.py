@@ -85,10 +85,3 @@ def twoDpolyFit(ps, xDeg, yDeg):
 	cS = solve(A, Z)
 	coeffs = cS.reshape((xDeg+1),(yDeg+1))
 	return coeffs
-
-# maximum deviation solving between linear move and poly model
-def maximumDeviation(cs, start, end):
-	start = np.asarray(start)
-	end = np.asarray(end)
-
-	return((0,0), 0)

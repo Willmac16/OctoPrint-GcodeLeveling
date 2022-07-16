@@ -2,26 +2,26 @@ run: install
 	octoprint serve
 	@echo "Run Called"
 
-test: install
-	rm -f testfiles/*.translate*
+testfile-clean:
+	rm -f testfiles/*-GCL*
+
+test: install testfile-clean
 	python3 test.py
 	@echo "Test Called"
 
+clean-test: clean test
+
 install: .install
 
-.install: setup.py
+.install: octoprint_gcodeleveling/src/parse.cpp octoprint_gcodeleveling/src/fit.cpp octoprint_gcodeleveling/src/vector.cpp setup.py
 	octoprint dev plugin:install
 	@touch .install
 	@echo "Install called"
 
-# .install: octoprint_translatemodel/src/translate.cpp setup.py
-# 	octoprint dev plugin:install
-# 	@touch .install
-# 	@echo "Install called"
-
 clean:
-	rm .install
-	rm *.so
+	rm -f .install
+	rm -f *.so
+	rm -rf build
 
 send:
 	git-scp faker "~/.octoprint/plugins/OctoPrint-GcodeLeveling" -y

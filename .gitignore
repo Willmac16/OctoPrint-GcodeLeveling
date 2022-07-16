@@ -8,3 +8,7 @@ dist
 .DS_Store
 *.zip
 .install
+.vscode
+*.so*
+test.py
+testFiles
