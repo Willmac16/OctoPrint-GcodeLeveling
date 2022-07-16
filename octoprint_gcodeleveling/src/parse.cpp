@@ -24,6 +24,18 @@ static PyObject *logging_object= NULL;
 static PyThreadState *_save;
 
 // logging wrappers
+// self._logger.error
+void error(std::string msg)
+{
+    Py_BLOCK_THREADS
+    PyObject *logging_message = Py_BuildValue("s", msg.c_str());
+    Py_XINCREF(logging_message);
+    PyObject_CallMethod(logging_object, "error", "O", logging_message, NULL);
+
+    Py_DECREF(logging_message);
+    Py_UNBLOCK_THREADS
+}
+
 // self._logger.info
 void info(std::string msg)
 {
@@ -459,11 +471,13 @@ float arc(GcodeState *current, GcodeState *next)
 
         if (directConnect.magnitude() > 2*next->r)
         {
-            // TODO: Send Excessive Radius Error to front end
+            error("G2/3 move is too far for radius");
+            exit(1);
         }
         else if (directConnect.magnitude() == 0.0)
         {
-            // TODO: Send No Radius Error to front end
+            error("No position change for Radius arc form");
+            exit(1);
         }
         else
         {
@@ -657,7 +671,7 @@ GcodeState * worstArcOffender(GcodeState *current, GcodeState *next, ParseObject
             maxP = p;
         }
     }
-    
+
     initDer = arcSqrDerivative(maxP, current, next, parseOpts);
 
     // std::cout << "P: " << maxP << ", " <<  maxDev << std::endl;
@@ -674,7 +688,7 @@ GcodeState * worstArcOffender(GcodeState *current, GcodeState *next, ParseObject
         // std::cout << "H: " << progress << " - " << der << " : " << arcSqrDistance(progress, current, next, parseOpts) << " ~ " << -der * der * STEP_SCALER + arcSqrDistance(progress, current, next, parseOpts) << std::endl;
     }
     while (fabs(der) >= 0.25 * initDer && fabs(der) >= MIN_DER && steps < STEP_BAIL && progress > TELO && progress < 1.0 - TELO);
-    
+
 
     // Check worst point is far enough from ends AND deviates enough to warrant correction
     if (progress > TELO && progress < 1.0 - TELO && arcSqrDistance(progress, current, next, parseOpts) > MIN_DEV)
