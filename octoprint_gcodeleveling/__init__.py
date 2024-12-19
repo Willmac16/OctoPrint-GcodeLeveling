@@ -61,12 +61,12 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 		self.afterStart = False
 		self.positionFloating = False
 
-		self.move_pattern = re.compile("^G[0-3]\s")
-		self.move_mode_pattern = re.compile("^G9[0-1]")
-		self.pos_reset_pattern = re.compile("^G92")
-		self.set_workspace_plane = re.compile("^G1[7-9]")
-		self.extruder_mode_pattern = re.compile("^M8[2-3]")
-		self.comment_pattern = re.compile(";.*$")
+		self.move_pattern = re.compile(r"^G[0-3]\s")
+		self.move_mode_pattern = re.compile(r"^G9[0-1]")
+		self.pos_reset_pattern = re.compile(r"^G92")
+		self.set_workspace_plane = re.compile(r"^G1[7-9]")
+		self.extruder_mode_pattern = re.compile(r"^M8[2-3]")
+		self.comment_pattern = re.compile(r";.*$")
 
 	def comment_split(self, line):
 		# Logic to seperate comments so they can be reattached after processing
@@ -190,7 +190,7 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 		# Check for standard Movement commands
 		if self.move_pattern.match(line) is not None and self.moveMode != "Relative" and not self.positionFloating:
 			activeCode = self.comment_split(line)
-			gcodeParts = re.split("\s", activeCode)
+			gcodeParts = re.split(r"\s", activeCode)
 
 			self.xPrev = self.xCurr
 			self.yPrev = self.yCurr
@@ -354,7 +354,7 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 		# # TODO: Add in proper support for relative movements
 		elif (self.pos_reset_pattern.match(line) is not None):
 			activeCode = self.comment_split(line)
-			gcodeParts = re.split("\s", activeCode)
+			gcodeParts = re.split(r"\s", activeCode)
 
 			self.xPrev = self.xCurr
 			self.yPrev = self.yCurr
@@ -372,7 +372,7 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 		# Check for movement mode
 		elif self.move_mode_pattern.match(line) is not None:
 			line = re.sub(self.comment_pattern, "", line)
-			mode = re.split("\s", line)[0]
+			mode = re.split(r"\s", line)[0]
 
 			if mode == "G90":
 				self.moveMode = "Absolute"
@@ -385,7 +385,7 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 		# Check for extruder movement mode
 		elif self.extruder_mode_pattern.match(line) is not None:
 			line = re.sub(self.comment_pattern, "", line)
-			mode = re.split("\s", line)[0]
+			mode = re.split(r"\s", line)[0]
 
 			if mode == "M82":
 				self.eMode = "Absolute"
@@ -398,7 +398,7 @@ class GcodePreProcessor(octoprint.filemanager.util.LineProcessorStream):
 		# Check for workspace switches
 		elif self.set_workspace_plane.match(line) is not None:
 			line = re.sub(self.comment_pattern, "", line)
-			mode = re.split("\s", line)[0]
+			mode = re.split(r"\s", line)[0]
 
 			self.workspacePlane = workspacePlanes.index(mode)
 			return origLine
