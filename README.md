@@ -31,7 +31,7 @@ or manually using this URL:
     https://github.com/willmac16/OctoPrint-GcodeLeveling/archive/master.zip
 
 + The plugin depends on numpy, so it will need to install this (if it is not already installed), which can take some time on a raspberry pi.
-    - Numpy in a python3 environment requires libatlas3-base, so some instances may need to run ```sudo apt install libatlas3-base``` to install properly.
+    - Numpy in a python3 environment requires libatlas3-base, so some instances may need to run ```sudo apt install libatlas3-base libopenblas-dev``` to install properly.
 
 ## Configuration
 
